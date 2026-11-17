@@ -28,3 +28,9 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+- Data access goes only through repositories in `src/data/repos.ts` via TanStack Query hooks in `src/data/hooks.ts`; the localStorage store is a mock to be swapped for a real API.
+- All budget maths lives in pure `src/lib/calc.ts` (money as integer KES cents) with tests in `src/lib/calc.test.ts`.
+- The app shell renders client-only (`ClientOnly` in `__root.tsx`) because data lives in browser storage.
+- Routing uses TanStack Router (spec's React Router is not supported); sub-pages use trailing-underscore files to avoid nesting.

@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as BudgetRouteImport } from './routes/budget'
+import { Route as EventsRouteImport } from './routes/events'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as BudgetLinesIdRouteImport } from './routes/budget_.lines.$id'
+import { Route as EventsIdRecordRouteImport } from './routes/events_.$id.record'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BudgetRoute = BudgetRouteImport.update({
+  id: '/budget',
+  path: '/budget',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsRoute = EventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BudgetLinesIdRoute = BudgetLinesIdRouteImport.update({
+  id: '/budget_/lines/$id',
+  path: '/budget/lines/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventsIdRecordRoute = EventsIdRecordRouteImport.update({
+  id: '/events_/$id/record',
+  path: '/events/$id/record',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/budget': typeof BudgetRoute
+  '/events': typeof EventsRoute
+  '/settings': typeof SettingsRoute
+  '/budget/lines/$id': typeof BudgetLinesIdRoute
+  '/events/$id/record': typeof EventsIdRecordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/budget': typeof BudgetRoute
+  '/events': typeof EventsRoute
+  '/settings': typeof SettingsRoute
+  '/budget/lines/$id': typeof BudgetLinesIdRoute
+  '/events/$id/record': typeof EventsIdRecordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/budget': typeof BudgetRoute
+  '/events': typeof EventsRoute
+  '/settings': typeof SettingsRoute
+  '/budget_/lines/$id': typeof BudgetLinesIdRoute
+  '/events_/$id/record': typeof EventsIdRecordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/budget'
+    | '/events'
+    | '/settings'
+    | '/budget/lines/$id'
+    | '/events/$id/record'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/budget'
+    | '/events'
+    | '/settings'
+    | '/budget/lines/$id'
+    | '/events/$id/record'
+  id:
+    | '__root__'
+    | '/'
+    | '/budget'
+    | '/events'
+    | '/settings'
+    | '/budget_/lines/$id'
+    | '/events_/$id/record'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BudgetRoute: typeof BudgetRoute
+  EventsRoute: typeof EventsRoute
+  SettingsRoute: typeof SettingsRoute
+  BudgetLinesIdRoute: typeof BudgetLinesIdRoute
+  EventsIdRecordRoute: typeof EventsIdRecordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/budget': {
+      id: '/budget'
+      path: '/budget'
+      fullPath: '/budget'
+      preLoaderRoute: typeof BudgetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events': {
+      id: '/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof EventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/budget_/lines/$id': {
+      id: '/budget_/lines/$id'
+      path: '/budget/lines/$id'
+      fullPath: '/budget/lines/$id'
+      preLoaderRoute: typeof BudgetLinesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/events_/$id/record': {
+      id: '/events_/$id/record'
+      path: '/events/$id/record'
+      fullPath: '/events/$id/record'
+      preLoaderRoute: typeof EventsIdRecordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BudgetRoute: BudgetRoute,
+  EventsRoute: EventsRoute,
+  SettingsRoute: SettingsRoute,
+  BudgetLinesIdRoute: BudgetLinesIdRoute,
+  EventsIdRecordRoute: EventsIdRecordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
