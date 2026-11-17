@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, ClipboardCheck, LayoutDashboard, ListTree, Settings } from "lucide-react";
+import { CalendarDays, ClipboardCheck, LayoutDashboard, ListTree, LogOut, Settings } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -59,6 +60,7 @@ function ShellInner({ children }: { children: ReactNode }) {
               <ToggleGroupItem value="USD">USD</ToggleGroupItem>
             </ToggleGroup>
             <Button size="sm" onClick={() => setPicker(true)}><ClipboardCheck className="h-4 w-4" />Record actuals</Button>
+            <Button size="icon" variant="ghost" aria-label="Sign out" onClick={() => supabase.auth.signOut()}><LogOut className="h-4 w-4" /></Button>
           </header>
           <main className="flex-1 px-3 py-5 pb-24 sm:px-6 md:pb-8">{children}</main>
         </div>

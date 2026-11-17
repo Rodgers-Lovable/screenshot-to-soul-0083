@@ -1,4 +1,4 @@
-// Repository interfaces + in-memory/localStorage implementation.
+// Repository interfaces backed by Lovable Cloud.
 // UI must only reach these through hooks in src/data/hooks.ts.
 import type { Attachment, AuditEntry, BudgetEvent, BudgetLine, BudgetPeriod, Component } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
@@ -28,32 +28,30 @@ export interface AttachmentRepo {
 export interface AuditRepo { list(): Promise<AuditEntry[]> }
 export interface AdminRepo { reset(): Promise<void>; importLines(rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[]): Promise<number> }
 
-const KEY = "pbt-store-v1";
+import { loadRemote, syncRemote, uploadEvidence, signUrls, currentUserLabel, listAudit, removeEvidence } from "./remote";
+
+// Working copy of the shared budget. Every repo call reloads it from Lovable Cloud,
+// applies the change in memory, then writes only the rows that changed back.
 let state: StoreData | null = null;
+let actor = "coordinator";
 
 function db(): StoreData {
-  if (state) return state;
-  if (typeof window !== "undefined") {
-    const raw = window.localStorage.getItem(KEY);
-    if (raw) {
-      try { state = JSON.parse(raw) as StoreData; return state; } catch { /* fall through */ }
-    }
-  }
-  state = makeSeed();
-  persist();
+  if (!state) throw new Error("Budget not loaded");
   return state;
 }
-function persist() {
-  if (typeof window === "undefined" || !state) return;
-  try { window.localStorage.setItem(KEY, JSON.stringify(state)); }
-  catch { throw new Error("Browser storage is full. Remove some large attachments."); }
+async function fresh() { state = await loadRemote(); actor = await currentUserLabel(); return state; }
+async function tx<T>(fn: () => T | Promise<T>): Promise<T> {
+  const before = clone(await fresh());
+  const r = await fn();
+  await syncRemote(before, db());
+  return r;
 }
 const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Math.random()).slice(2));
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const str = (v: unknown) => (v === undefined || v === null || v === "" ? null : typeof v === "object" ? JSON.stringify(v) : String(v));
 
 function audit(entity: string, entityId: string, field: string, oldValue: unknown, newValue: unknown) {
-  db().audit.push({ id: uid(), entity, entityId, field, oldValue: str(oldValue), newValue: str(newValue), changedAt: new Date().toISOString(), changedBy: "coordinator" });
+  db().audit.push({ id: uid(), entity, entityId, field, oldValue: str(oldValue), newValue: str(newValue), changedAt: new Date().toISOString(), changedBy: actor });
 }
 function auditCreate(entity: string, rec: object & { id: string }) {
   for (const [k, v] of Object.entries(rec)) if (k !== "id" && v !== undefined) audit(entity, rec.id, k, null, v);
@@ -64,37 +62,48 @@ function applyPatch<T extends { id: string }>(entity: string, rec: T, patch: Par
     if (str(rec[k]) !== str(v)) { audit(entity, rec.id, k, rec[k], v); rec[k] = v; }
   }
 }
-const tick = <T,>(v: T) => Promise.resolve(clone(v));
+const read = async <T,>(f: (d: StoreData) => T): Promise<T> => clone(f(await fresh()));
 
 export const periodRepo: PeriodRepo = {
-  get: () => tick(db().period),
-  async update(patch) {
+  get: () => read((d) => d.period),
+  update: (patch) => tx(() => {
     const d = db();
     if (!d.period) { d.period = { id: "p1", projectName: "", name: "", startDate: "", endDate: "", fxRate: 125, ...patch }; auditCreate("period", d.period); }
     else applyPatch("period", d.period, patch);
-    persist(); return clone(d.period);
-  },
+    return clone(d.period);
+  }),
 };
 
+function removeLineLocal(id: string) {
+  const d = db();
+  const line = d.lines.find((l) => l.id === id);
+  const evIds = d.events.filter((e) => e.lineId === id).map((e) => e.id);
+  d.attachments.filter((a) => evIds.includes(a.eventId)).forEach((a) => audit("attachment", a.id, "(deleted)", a.fileName, null));
+  d.attachments = d.attachments.filter((a) => !evIds.includes(a.eventId));
+  evIds.forEach((e) => audit("event", e, "(deleted)", e, null));
+  d.events = d.events.filter((e) => e.lineId !== id);
+  d.lines = d.lines.filter((l) => l.id !== id);
+  audit("line", id, "(deleted)", line?.description, null);
+}
+
 export const componentRepo: ComponentRepo = {
-  list: () => tick([...db().components].sort((a, b) => a.sortOrder - b.sortOrder)),
-  async create(input) {
+  list: () => read((d) => [...d.components].sort((a, b) => a.sortOrder - b.sortOrder)),
+  create: (input) => tx(() => {
     const d = db();
     const c: Component = { id: uid(), periodId: d.period?.id ?? "p1", sortOrder: d.components.length + 1, ...input };
-    d.components.push(c); auditCreate("component", c); persist(); return clone(c);
-  },
-  async update(id, patch) {
+    d.components.push(c); auditCreate("component", c); return clone(c);
+  }),
+  update: (id, patch) => tx(() => {
     const c = db().components.find((x) => x.id === id); if (!c) throw new Error("Component not found");
-    applyPatch("component", c, patch); persist(); return clone(c);
-  },
-  async remove(id) {
+    applyPatch("component", c, patch); return clone(c);
+  }),
+  remove: (id) => tx(() => {
     const d = db();
-    const lineIds = d.lines.filter((l) => l.componentId === id).map((l) => l.id);
-    for (const lid of lineIds) await lineRepo.remove(lid);
+    d.lines.filter((l) => l.componentId === id).forEach((l) => removeLineLocal(l.id));
     const c = d.components.find((x) => x.id === id);
     d.components = d.components.filter((x) => x.id !== id);
-    audit("component", id, "(deleted)", c?.name, null); persist();
-  },
+    audit("component", id, "(deleted)", c?.name, null);
+  }),
 };
 
 function createEvents(line: BudgetLine, from: number, to: number) {
@@ -110,7 +119,6 @@ function retitle(line: BudgetLine) {
     if (e.title !== t) e.title = t;
   }
 }
-
 function createLine(input: LineInput): BudgetLine {
   const d = db();
   const line: BudgetLine = { ...input, id: uid(), sortOrder: d.lines.length + 1 };
@@ -120,9 +128,9 @@ function createLine(input: LineInput): BudgetLine {
 }
 
 export const lineRepo: LineRepo = {
-  list: () => tick([...db().lines].sort((a, b) => a.sortOrder - b.sortOrder)),
-  async create(input) { const l = createLine(input); persist(); return clone(l); },
-  async update(id, patch) {
+  list: () => read((d) => [...d.lines].sort((a, b) => a.sortOrder - b.sortOrder)),
+  create: (input) => tx(() => clone(createLine(input))),
+  update: (id, patch) => tx(() => {
     const d = db();
     const line = d.lines.find((l) => l.id === id); if (!line) throw new Error("Line not found");
     if (patch.occurrences !== undefined && patch.occurrences !== line.occurrences) {
@@ -134,59 +142,47 @@ export const lineRepo: LineRepo = {
       for (const rid of plan.removeIds) audit("event", rid, "(deleted)", d.events.find((e) => e.id === rid)?.title, null);
       d.events = d.events.filter((e) => !plan.removeIds.includes(e.id));
     } else applyPatch("line", line, patch);
-    retitle(line); persist(); return clone(line);
-  },
-  async duplicate(id) {
+    retitle(line); return clone(line);
+  }),
+  duplicate: (id) => tx(() => {
     const src = db().lines.find((l) => l.id === id); if (!src) throw new Error("Line not found");
     const { id: _i, sortOrder: _s, financePostedCents: _f, ...rest } = src;
-    const l = createLine({ ...rest, description: `${src.description} (copy)` }); persist(); return clone(l);
-  },
-  async remove(id) {
-    const d = db();
-    const line = d.lines.find((l) => l.id === id);
-    const evIds = d.events.filter((e) => e.lineId === id).map((e) => e.id);
-    d.attachments.filter((a) => evIds.includes(a.eventId)).forEach((a) => audit("attachment", a.id, "(deleted)", a.fileName, null));
-    d.attachments = d.attachments.filter((a) => !evIds.includes(a.eventId));
-    evIds.forEach((e) => audit("event", e, "(deleted)", e, null));
-    d.events = d.events.filter((e) => e.lineId !== id);
-    d.lines = d.lines.filter((l) => l.id !== id);
-    audit("line", id, "(deleted)", line?.description, null); persist();
-  },
+    return clone(createLine({ ...rest, description: `${src.description} (copy)` }));
+  }),
+  remove: (id) => tx(() => removeLineLocal(id)),
 };
 
 export const eventRepo: EventRepo = {
-  list: () => tick(db().events),
-  async update(id, patch) {
+  list: () => read((d) => d.events),
+  update: (id, patch) => tx(() => {
     const e = db().events.find((x) => x.id === id); if (!e) throw new Error("Event not found");
-    applyPatch("event", e, patch); persist(); return clone(e);
-  },
+    applyPatch("event", e, patch); return clone(e);
+  }),
 };
-
-const readAsDataUrl = (file: File) =>
-  new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(file); });
 
 export const attachmentRepo: AttachmentRepo = {
-  list: () => tick(db().attachments),
-  async add(eventId, file, label) {
-    // Mock storage: small files are inlined so they survive a refresh; large ones use an object URL.
-    const fileUrl = file.size < 1_500_000 ? await readAsDataUrl(file) : URL.createObjectURL(file);
-    const a: Attachment = { id: uid(), eventId, fileName: file.name, fileUrl, mimeType: file.type, sizeBytes: file.size, label, uploadedAt: new Date().toISOString() };
-    db().attachments.push(a);
-    audit("attachment", a.id, "(created)", null, `${a.fileName}${label ? ` · ${label}` : ""}`);
-    persist(); return clone(a);
+  list: async () => signUrls(await read((d) => d.attachments)),
+  add: async (eventId, file, label) => {
+    const path = await uploadEvidence(eventId, file);
+    return tx(() => {
+      const a: Attachment = { id: uid(), eventId, fileName: file.name, fileUrl: path, mimeType: file.type, sizeBytes: file.size, label, uploadedAt: new Date().toISOString() };
+      db().attachments.push(a);
+      audit("attachment", a.id, "(created)", null, `${a.fileName}${label ? ` · ${label}` : ""}`);
+      return clone(a);
+    }).catch(async (e) => { await removeEvidence([path]); throw e; });
   },
-  async remove(id) {
+  remove: (id) => tx(() => {
     const d = db(); const a = d.attachments.find((x) => x.id === id);
     d.attachments = d.attachments.filter((x) => x.id !== id);
-    audit("attachment", id, "(deleted)", a?.fileName, null); persist();
-  },
+    audit("attachment", id, "(deleted)", a?.fileName, null);
+  }),
 };
 
-export const auditRepo: AuditRepo = { list: () => tick([...db().audit].reverse()) };
+export const auditRepo: AuditRepo = { list: () => listAudit() };
 
 export const adminRepo: AdminRepo = {
-  async reset() { state = makeSeed(); persist(); },
-  async importLines(rows) {
+  reset: () => tx(() => { const s = makeSeed(); s.audit = [...db().audit]; state = s; audit("period", "p1", "(reset to demo)", null, "demo data"); }),
+  importLines: (rows) => tx(() => {
     const d = db(); const created = new Map<string, string>();
     for (const r of rows) {
       let cid = r.component.id;
@@ -199,9 +195,6 @@ export const adminRepo: AdminRepo = {
       }
       createLine({ ...r.line, componentId: cid });
     }
-    persist(); return rows.length;
-  },
+    return rows.length;
+  }),
 };
-
-/** Test helper: load a fresh seed into memory. */
-export const __resetForTests = () => { state = makeSeed(); };

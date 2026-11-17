@@ -13,6 +13,7 @@ import { ClientOnly } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/app/shell";
+import { AuthGate } from "@/components/app/auth-gate";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -130,11 +131,13 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <TooltipProvider delayDuration={200}>
-        {/* Data lives in browser storage, so the app renders on the client only. */}
+        {/* The sign-in session lives in the browser, so the app renders on the client only. */}
         <ClientOnly fallback={<div className="p-8 text-sm text-muted-foreground">Loading budget…</div>}>
-          <AppShell>
-            <Outlet />
-          </AppShell>
+          <AuthGate>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+          </AuthGate>
         </ClientOnly>
         <Toaster richColors position="top-center" />
       </TooltipProvider>

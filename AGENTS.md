@@ -30,7 +30,8 @@ use the editor.
 <!-- LOVABLE:END -->
 
 ## Project rules
-- Data access goes only through repositories in `src/data/repos.ts` via TanStack Query hooks in `src/data/hooks.ts`; the localStorage store is a mock to be swapped for a real API.
+- Data access goes only through repositories in `src/data/repos.ts` via TanStack Query hooks in `src/data/hooks.ts`; repos load the shared budget from Lovable Cloud (`src/data/remote.ts`), apply changes in memory and write back only changed rows, so business logic stays in the repos.
 - All budget maths lives in pure `src/lib/calc.ts` (money as integer KES cents) with tests in `src/lib/calc.test.ts`.
-- The app shell renders client-only (`ClientOnly` in `__root.tsx`) because data lives in browser storage.
+- The app shell renders client-only (`ClientOnly` in `__root.tsx`) because the sign-in session lives in the browser; `AuthGate` shows sign-in until a team member is signed in.
 - Routing uses TanStack Router (spec's React Router is not supported); sub-pages use trailing-underscore files to avoid nesting.
+- Evidence files live in the private `evidence` bucket; `fileUrl` stores `storage:<path>` and is swapped for a signed link when listed.
