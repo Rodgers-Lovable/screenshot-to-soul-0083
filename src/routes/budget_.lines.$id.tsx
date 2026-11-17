@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addMonths, addWeeks, format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { ArrowLeft, CalendarRange, Pencil } from "lucide-react";
@@ -160,6 +160,7 @@ function BulkDates({ open, onOpenChange, events }: { open: boolean; onOpenChange
   const [start, setStart] = useState(todayISO());
   const [n, setN] = useState(2);
   const [picked, setPicked] = useState<Record<string, string>>({});
+  useEffect(() => { if (open) { setPattern("monthly"); setStart(todayISO()); setN(2); setPicked({}); } }, [open]);
   const targets = events.filter((e) => e.status === "planned");
   const dates = targets.map((e, i) => {
     if (pattern === "pick") return picked[e.id] ?? e.plannedDate ?? "";

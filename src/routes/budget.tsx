@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Info, MoreHorizontal, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -180,6 +180,7 @@ function DeleteLineDialog({ line, onClose, hasDone }: { line: BudgetLine | null;
   const rm = useRemoveLine();
   const [typed, setTyped] = useState("");
   const ok = !hasDone || typed.trim() === line?.description;
+  useEffect(() => { setTyped(""); }, [line?.id]);
   return (
     <Dialog open={!!line} onOpenChange={(o) => { if (!o) { setTyped(""); onClose(); } }}>
       <DialogContent>
@@ -206,8 +207,9 @@ function AddComponentDialog({ open, onOpenChange, nextCode }: { open: boolean; o
   const create = useCreateComponent();
   const [name, setName] = useState("");
   const [code, setCode] = useState(nextCode);
+  useEffect(() => { if (open) { setCode(nextCode); setName(""); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (o) { setCode(nextCode); setName(""); } }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader><DialogTitle>Add component</DialogTitle></DialogHeader>
         <div className="grid grid-cols-[80px_1fr] gap-3">
@@ -226,6 +228,7 @@ function DeleteComponentDialog({ component, onClose, lineCount, eventCount }: { 
   const rm = useRemoveComponent();
   const [typed, setTyped] = useState("");
   const close = () => { setTyped(""); onClose(); };
+  useEffect(() => { setTyped(""); }, [component?.id]);
   const ok = typed.trim() === component?.name;
   return (
     <Dialog open={!!component} onOpenChange={(o) => { if (!o) close(); }}>

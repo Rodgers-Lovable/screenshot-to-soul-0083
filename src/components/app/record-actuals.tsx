@@ -222,7 +222,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
 
       <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
         {ev.status !== "planned" && <Button variant="outline" onClick={reopen}>Reopen</Button>}
-        {ev.status !== "cancelled" && <Button variant="outline" onClick={() => setCancelOpen(true)}>Mark cancelled</Button>}
+        {ev.status !== "cancelled" && <Button variant="outline" onClick={() => { setReason(""); setCancelOpen(true); }}>Mark cancelled</Button>}
         <Button variant="secondary" onClick={() => save(ev.status === "done" ? "done" : "planned")}>Save without completing</Button>
         <Button onClick={() => save("done")} disabled={update.isPending}>Mark done</Button>
       </div>
