@@ -15,6 +15,13 @@
       "when": 1794950457664,
       "tag": "0001_team_membership_access",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794950591117,
+      "tag": "0002_team_admins_remove_member",
+      "breakpoints": true
     }
   ]
 }

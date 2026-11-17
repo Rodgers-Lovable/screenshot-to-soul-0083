@@ -35,4 +35,4 @@ use the editor.
 - The app shell renders client-only (`ClientOnly` in `__root.tsx`) because the sign-in session lives in the browser; `AuthGate` shows sign-in until a team member is signed in.
 - Routing uses TanStack Router (spec's React Router is not supported); sub-pages use trailing-underscore files to avoid nesting.
 - Evidence files live in the private `evidence` bucket; `fileUrl` stores `storage:<path>` and is swapped for a signed link when listed.
-- Budget data and evidence are readable/writable only by rows in `team_members` (`is_team_member()` in RLS); the first signed-in user claims an empty team via `join_team_if_empty`, later people are added by members with `add_team_member` — signing up alone grants no access.
+- Budget data and evidence are readable/writable only by rows in `team_members` (`is_team_member()` in RLS); the first signed-in user claims an empty team via `join_team_if_empty`, later people are added by members with `add_team_member` and removed only by admins (`user_roles`, `has_role`) via `remove_team_member` — signing up alone grants no access.
