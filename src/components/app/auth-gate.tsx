@@ -22,8 +22,24 @@ export function AuthGate({ children }: { children: ReactNode }) {
     });
     return () => data.subscription.unsubscribe();
   }, [qc]);
-  if (session === undefined) return <div className="p-8 text-sm text-muted-foreground">Loading budget…</div>;
-  return session ? <>{children}</> : <SignIn />;
+  const [member, setMember] = useState<boolean | undefined>(undefined);
+  const uid = session?.user.id;
+  useEffect(() => {
+    if (!uid) return setMember(undefined);
+    supabase.rpc("join_team_if_empty").then(({ data }) => setMember(!!data));
+  }, [uid]);
+  if (session === undefined || (session && member === undefined)) return <div className="p-8 text-sm text-muted-foreground">Loading budget…</div>;
+  if (!session) return <SignIn />;
+  if (!member) return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm space-y-3 rounded-lg border bg-card p-6">
+        <h1 className="text-xl font-semibold">Waiting for access</h1>
+        <p className="text-sm text-muted-foreground">You're signed in as {session.user.email}. Ask a team member to add you under Settings → Team.</p>
+        <Button variant="outline" onClick={() => supabase.auth.signOut()}>Sign out</Button>
+      </div>
+    </div>
+  );
+  return <>{children}</>;
 }
 
 const GoogleG = () => (

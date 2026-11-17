@@ -8,6 +8,13 @@
       "when": 1794950127538,
       "tag": "0000_budget_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794950457664,
+      "tag": "0001_team_membership_access",
+      "breakpoints": true
     }
   ]
 }

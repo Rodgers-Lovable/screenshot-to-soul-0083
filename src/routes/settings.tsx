@@ -14,6 +14,7 @@ import { exportWorkbook, parseBudgetRows, readWorkbook, type ParsedBlock, type P
 import { formatKES, kesToCents } from "@/lib/format";
 import { DURATION_UNITS, QUANTITY_UNITS, type BudgetPeriod, type DurationUnit, type QuantityUnit } from "@/lib/types";
 import { PageHeader } from "@/components/app/shell";
+import { TeamPanel } from "@/components/app/team-panel";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -37,11 +38,13 @@ function SettingsPage() {
           <TabsTrigger value="import">Import</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
+          <TabsTrigger value="team">Team</TabsTrigger>
         </TabsList>
         <TabsContent value="period"><PeriodForm /></TabsContent>
         <TabsContent value="import"><ImportPanel /></TabsContent>
         <TabsContent value="export"><ExportPanel /></TabsContent>
         <TabsContent value="audit"><AuditLog /></TabsContent>
+        <TabsContent value="team"><TeamPanel /></TabsContent>
       </Tabs>
     </div>
   );

@@ -251,12 +251,32 @@ export type Database = {
         }
         Relationships: []
       }
+      team_members: {
+        Row: {
+          added_at: string
+          email: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          email?: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          email?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      add_team_member: { Args: { _email: string }; Returns: boolean }
+      is_team_member: { Args: never; Returns: boolean }
+      join_team_if_empty: { Args: never; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
