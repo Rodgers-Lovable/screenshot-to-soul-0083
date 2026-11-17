@@ -89,7 +89,8 @@ export const componentRepo: ComponentRepo = {
   },
   async remove(id) {
     const d = db();
-    if (d.lines.some((l) => l.componentId === id)) throw new Error("Remove or move this component's lines first.");
+    const lineIds = d.lines.filter((l) => l.componentId === id).map((l) => l.id);
+    for (const lid of lineIds) await lineRepo.remove(lid);
     const c = d.components.find((x) => x.id === id);
     d.components = d.components.filter((x) => x.id !== id);
     audit("component", id, "(deleted)", c?.name, null); persist();

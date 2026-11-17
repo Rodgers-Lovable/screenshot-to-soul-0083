@@ -9,10 +9,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBudgetData, useCreateComponent, useDuplicateLine, useRemoveLine } from "@/data/hooks";
+import { useBudgetData, useCreateComponent, useDuplicateLine, useRemoveComponent, useRemoveLine } from "@/data/hooks";
 import { lineFlags, lineSummary, sumSummaries, type Summary } from "@/lib/calc";
 import { durationLabel } from "@/lib/format";
-import type { BudgetLine } from "@/lib/types";
+import type { BudgetLine, Component } from "@/lib/types";
 import { Money, useFmt } from "@/components/app/currency";
 import { Flags } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
@@ -37,6 +37,7 @@ function BudgetPage() {
   const [editor, setEditor] = useState<{ open: boolean; line?: BudgetLine; componentId?: string }>({ open: false });
   const [del, setDel] = useState<BudgetLine | null>(null);
   const [compOpen, setCompOpen] = useState(false);
+  const [delComp, setDelComp] = useState<Component | null>(null);
 
   const sums = useMemo(() => new Map(d.lines.map((l) => [l.id, lineSummary(l, d.events)])), [d.lines, d.events]);
   const total = useMemo(() => sumSummaries([...sums.values()]), [sums]);
@@ -69,6 +70,12 @@ function BudgetPage() {
                 <span className="hidden text-xs text-muted-foreground sm:inline">Planned</span>
                 <Money cents={s.planned} size="md" />
                 <Button size="sm" variant="ghost" onClick={() => setEditor({ open: true, componentId: c.id })}><Plus className="h-4 w-4" />Add line</Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Component actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem className="text-destructive" onSelect={() => setDelComp(c)}>Delete component</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <CollapsibleContent>
                 <div className="overflow-x-auto">
@@ -117,6 +124,7 @@ function BudgetPage() {
 
       <LineEditor open={editor.open} onOpenChange={(o) => setEditor((e) => ({ ...e, open: o }))} line={editor.line} componentId={editor.componentId} />
       <DeleteLineDialog line={del} onClose={() => setDel(null)} hasDone={!!del && d.events.some((e) => e.lineId === del.id && e.status === "done")} />
+      <DeleteComponentDialog component={delComp} onClose={() => setDelComp(null)} lineCount={delComp ? d.lines.filter((l) => l.componentId === delComp.id).length : 0} eventCount={delComp ? d.events.filter((e) => d.lines.some((l) => l.id === e.lineId && l.componentId === delComp.id)).length : 0} />
       <AddComponentDialog open={compOpen} onOpenChange={setCompOpen} nextCode={String(d.components.length + 1)} />
     </div>
   );
@@ -208,6 +216,33 @@ function AddComponentDialog({ open, onOpenChange, nextCode }: { open: boolean; o
         </div>
         <DialogFooter>
           <Button disabled={!name.trim()} onClick={() => create.mutate({ code: code.trim(), name: name.trim() }, { onSuccess: () => { toast.success("Component added"); onOpenChange(false); } })}>Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteComponentDialog({ component, onClose, lineCount, eventCount }: { component: Component | null; onClose: () => void; lineCount: number; eventCount: number }) {
+  const rm = useRemoveComponent();
+  const [typed, setTyped] = useState("");
+  const close = () => { setTyped(""); onClose(); };
+  const ok = typed.trim() === component?.name;
+  return (
+    <Dialog open={!!component} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete component?</DialogTitle>
+          <DialogDescription>
+            This permanently deletes “{component?.code}. {component?.name}” with its {lineCount} line{lineCount === 1 ? "" : "s"}, {eventCount} event{eventCount === 1 ? "" : "s"} and all their evidence files.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1">
+          <Label htmlFor="confirm-comp">Type the component name to confirm.</Label>
+          <Input id="confirm-comp" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={component?.name} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>Cancel</Button>
+          <Button variant="destructive" disabled={!ok || rm.isPending} onClick={() => component && rm.mutate(component.id, { onSuccess: () => { toast.success("Component deleted"); close(); }, onError: (e) => toast.error(e.message) })}>Delete</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
