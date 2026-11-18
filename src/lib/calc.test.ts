@@ -14,7 +14,7 @@ import {
   lineProgress,
   scheduleDates,
 } from "./calc";
-import { formatKES, formatUSD, parseMoney } from "./format";
+import { formatKES, formatUSD, formulaShort, parseMoney } from "./format";
 import type { BudgetEvent, BudgetLine } from "./types";
 
 const line = (p: Partial<BudgetLine> = {}): BudgetLine => ({
@@ -265,6 +265,29 @@ describe("line progress", () => {
     );
     expect(p).toEqual({ total: 6, done: 1, cancelled: 1, undated: 1, next: "2026-11-20" });
   });
+});
+
+describe("short formula", () => {
+  const f = (p: Partial<BudgetLine>) =>
+    formulaShort({
+      quantity: 1,
+      quantityUnit: "pax",
+      unitCostCents: 100_00,
+      duration: 1,
+      durationUnit: "one-off",
+      occurrences: 1,
+      ...p,
+    });
+  it("reads monthly lines as months", () =>
+    expect(
+      f({ quantity: 600, quantityUnit: "units", durationUnit: "months", occurrences: 12 }),
+    ).toBe("600 units × KES 100 × 12 months"));
+  it("keeps days and repeats", () =>
+    expect(f({ duration: 4, durationUnit: "days", occurrences: 2 })).toBe(
+      "1 pax × KES 100 × 4 days × 2 times",
+    ));
+  it("drops one-off and groups thousands", () =>
+    expect(f({ quantity: 15000, quantityUnit: "SMS" })).toBe("15,000 SMS × KES 100"));
 });
 
 describe("money", () => {

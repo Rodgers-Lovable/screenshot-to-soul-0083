@@ -1,3 +1,4 @@
+import type { BudgetLine } from "./types";
 const nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -41,4 +42,23 @@ export function todayISO(): string {
 export function durationLabel(d: number, unit: string) {
   if (unit === "one-off") return "one-off";
   return `${d} ${unit === "days" ? (d === 1 ? "day" : "days") : d === 1 ? "month" : "months"}`;
+}
+
+/** Short cost formula for headers: skips "× 1" parts, e.g. "71 pax × KES 500 × 12 months". */
+export function formulaShort(
+  l: Pick<
+    BudgetLine,
+    "quantity" | "quantityUnit" | "unitCostCents" | "duration" | "durationUnit" | "occurrences"
+  >,
+) {
+  const parts = [
+    `${l.quantity.toLocaleString("en-US")} ${l.quantityUnit}`,
+    formatKES(l.unitCostCents),
+  ];
+  const monthly = l.durationUnit === "months" && l.duration === 1;
+  if (l.durationUnit !== "one-off" && !monthly && l.duration !== 1)
+    parts.push(durationLabel(l.duration, l.durationUnit));
+  else if (l.durationUnit === "days" && l.duration === 1) parts.push("1 day");
+  if (l.occurrences > 1) parts.push(monthly ? `${l.occurrences} months` : `${l.occurrences} times`);
+  return parts.join(" × ");
 }
