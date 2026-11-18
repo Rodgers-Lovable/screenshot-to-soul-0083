@@ -278,6 +278,7 @@ function EventsPage() {
             v && set({ view: v === "grouped" ? undefined : (v as "flat" | "calendar") })
           }
           aria-label="View"
+          data-tour="events-view"
         >
           <ToggleGroupItem value="grouped">By line</ToggleGroupItem>
           <ToggleGroupItem value="flat">All rows</ToggleGroupItem>
@@ -289,7 +290,7 @@ function EventsPage() {
 
       {view !== "calendar" && (
         <Tabs value={tab} onValueChange={(v) => set({ tab: v as EventTab })} className="mb-3">
-          <TabsList className="h-auto flex-wrap">
+          <TabsList className="h-auto flex-wrap" data-tour="events-tabs">
             {TABS.map((t) => (
               <TabsTrigger key={t.v} value={t.v} className="gap-1.5">
                 {t.l}
@@ -309,7 +310,7 @@ function EventsPage() {
         </Tabs>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2" data-tour="events-filters">
         <FilterSelect
           label="Component"
           value={search.component}

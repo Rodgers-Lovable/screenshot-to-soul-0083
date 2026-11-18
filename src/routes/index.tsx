@@ -150,7 +150,7 @@ function Dashboard() {
         title="Dashboard"
         sub={`${d.period.startDate} → ${d.period.endDate} · 1 USD = KES ${d.period.fxRate}`}
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-tour="dash-kpis">
         <Kpi label="Total budget" cents={total.planned} />
         <Kpi label="Actual to date" cents={total.actualToDate} />
         <Kpi label="Remaining" cents={total.remaining} />
@@ -176,7 +176,7 @@ function Dashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
+        <Card data-tour="dash-burn">
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base">Burn rate</CardTitle>
             <Badge
