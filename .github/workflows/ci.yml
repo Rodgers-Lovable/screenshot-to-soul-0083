@@ -16,15 +16,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          bun-version: latest
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: bun install --frozen-lockfile
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - run: npx tsc --noEmit -p .
-      - run: bun run lint
-      - run: bun run test
-      - run: bun run build
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

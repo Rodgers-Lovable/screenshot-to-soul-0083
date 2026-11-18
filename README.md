@@ -6,7 +6,7 @@ Built with TanStack Start, React 19, Tailwind v4 and shadcn/ui. Data, sign-in an
 
 ## Setup
 
-You need Node 24 and a Supabase project.
+You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is the only package manager; `.npmrc` pins exact versions and skips releases younger than a day.
 
 1. Install dependencies:
 
