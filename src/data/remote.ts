@@ -130,7 +130,6 @@ async function doLoad(): Promise<StoreData> {
   return d;
 }
 
-
 export async function syncRemote(before: StoreData, after: StoreData) {
   const changed = (k: Key | "period") => {
     const a = k === "period" ? (after.period ? [after.period] : []) : after[k];

@@ -5,7 +5,13 @@ export type CostCategory = "Personnel" | "Travel" | "Supplies" | "Contractual" |
 
 export const DURATION_UNITS: DurationUnit[] = ["days", "months", "one-off"];
 export const QUANTITY_UNITS: QuantityUnit[] = ["pax", "SMS", "units", "lines", "vehicles", "sets"];
-export const COST_CATEGORIES: CostCategory[] = ["Personnel", "Travel", "Supplies", "Contractual", "Other"];
+export const COST_CATEGORIES: CostCategory[] = [
+  "Personnel",
+  "Travel",
+  "Supplies",
+  "Contractual",
+  "Other",
+];
 
 export interface BudgetPeriod {
   id: string;

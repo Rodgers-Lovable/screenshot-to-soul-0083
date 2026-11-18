@@ -1,4 +1,11 @@
-import type { Attachment, AuditEntry, BudgetEvent, BudgetLine, BudgetPeriod, Component } from "@/lib/types";
+import type {
+  Attachment,
+  AuditEntry,
+  BudgetEvent,
+  BudgetLine,
+  BudgetPeriod,
+  Component,
+} from "@/lib/types";
 
 export interface StoreData {
   period: BudgetPeriod | null;
