@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Info, MoreHorizontal, Pencil, Plus, Search } from "lucide-react";
+import { Check, ChevronDown, Copy, Info, MoreHorizontal, Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -236,9 +236,23 @@ function ComponentDialog({ open, onOpenChange, nextCode, component }: { open: bo
 }
 
 function ConfirmLabel({ id, text }: { id: string; text?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    // Stop the label from moving focus to the input.
+    e.preventDefault();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+      () => toast.error("Could not copy"),
+    );
+  };
   return (
     <Label htmlFor={id} className="block text-sm/6 font-normal text-muted-foreground">
-      Type <code className="rounded bg-muted box-decoration-clone px-1 py-0.5 font-mono text-xs text-foreground">{text}</code> to confirm.
+      Type <code className="rounded bg-muted box-decoration-clone px-1 py-0.5 font-mono text-xs text-foreground">{text}</code>
+      <button type="button" onClick={copy} aria-label={copied ? "Copied" : "Copy name"} className="mx-1 inline-flex size-5 items-center justify-center rounded align-middle text-muted-foreground hover:bg-muted hover:text-foreground">
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      </button>
+      to confirm.
     </Label>
   );
 }
