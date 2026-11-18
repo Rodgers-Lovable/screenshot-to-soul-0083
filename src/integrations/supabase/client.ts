@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
+import { hostOf, logger } from "@/lib/log";
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
@@ -68,6 +69,12 @@ function createSupabaseClient() {
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }
+
+  logger("supabase").info("client created", {
+    project: hostOf(SUPABASE_URL),
+    side: typeof window === "undefined" ? "server" : "browser",
+    keyType: SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_") ? "publishable" : "legacy anon",
+  });
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
