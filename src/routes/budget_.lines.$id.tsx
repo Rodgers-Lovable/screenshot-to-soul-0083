@@ -1,35 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { addMonths, addWeeks, format, parseISO } from "date-fns";
+import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarRange, Pencil } from "lucide-react";
+import { ArrowLeft, CalendarClock, ChevronRight, Info, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useBudgetData, useUpdateEvent, useUpdateLine } from "@/data/hooks";
+import { useBudgetData, useUpdateLine } from "@/data/hooks";
 import { actualInputs, eventFigures, eventFlags, lineFlags, lineSummary } from "@/lib/calc";
-import { kesToCents, todayISO } from "@/lib/format";
-import type { BudgetEvent } from "@/lib/types";
+import { formulaShort, kesToCents, pct, todayISO } from "@/lib/format";
 import { Money, useFmt } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
-import { LineEditor, formulaSentence } from "@/components/app/line-editor";
+import { LineEditor } from "@/components/app/line-editor";
 import { useRecord } from "@/components/app/shell";
 import { Truncated } from "@/components/app/truncated";
+import { ScheduleDialog } from "@/components/app/schedule-dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
 
 export const Route = createFileRoute("/budget_/lines/$id")({
   head: () => ({
@@ -52,7 +39,7 @@ function LineDetail() {
   const f = useFmt();
   const { open } = useRecord();
   const [edit, setEdit] = useState(false);
-  const [bulk, setBulk] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const line = d.lines.find((l) => l.id === id);
   const events = useMemo(
     () => d.events.filter((e) => e.lineId === id).sort((a, b) => a.sequence - b.sequence),
@@ -74,63 +61,101 @@ function LineDetail() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <Link
-          to="/budget"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      <header className="space-y-3">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Budget
-        </Link>
-        <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              {comp ? `${comp.code}. ${comp.name}` : ""}
-              {line.groupLabel ? ` · ${line.groupLabel}` : ""}
-            </p>
-            <h1 className="text-xl font-semibold">{line.description}</h1>
-            <p className="mt-1 text-sm tabular-nums">{formulaSentence(line, f.fx)}</p>
-            {line.justification && (
-              <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{line.justification}</p>
-            )}
-            <div className="mt-2">
-              <Flags flags={lineFlags(s)} />
+          <Link
+            to="/budget"
+            className="inline-flex shrink-0 items-center gap-1 hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Budget
+          </Link>
+          {comp && (
+            <>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <Truncated text={`${comp.code}. ${comp.name}`} className="max-w-xs" />
+            </>
+          )}
+          {line.groupLabel && (
+            <>
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <Truncated text={line.groupLabel} className="max-w-48" />
+            </>
+          )}
+        </nav>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex items-start gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">{line.description}</h1>
+              {line.justification && (
+                <Popover>
+                  <PopoverTrigger
+                    className="mt-1.5 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+                    aria-label="About this line"
+                  >
+                    <Info className="h-4 w-4" />
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="max-w-sm text-sm">
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">Justification</p>
+                    {line.justification}
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
+            <p className="text-sm text-muted-foreground tabular-nums">{formulaShort(line)}</p>
+            <Flags flags={lineFlags(s)} />
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setBulk(true)}>
-              <CalendarRange className="h-4 w-4" />
-              Bulk set dates
-            </Button>
+            {events.some((e) => e.status === "planned") && (
+              <Button variant="outline" onClick={() => setScheduling(true)}>
+                <CalendarClock className="h-4 w-4" />
+                Schedule
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setEdit(true)}>
               <Pencil className="h-4 w-4" />
               Edit line
             </Button>
           </div>
         </div>
+      </header>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Headline label="Planned" cents={s.planned} />
+        <Headline
+          label="Actual to date"
+          cents={s.actualToDate}
+          danger={s.actualToDate > s.planned}
+          progress={s.planned ? (s.actualToDate / s.planned) * 100 : 0}
+          note={s.planned ? `${pct(s.actualToDate / s.planned)} of planned` : undefined}
+        />
+        <Headline label="Remaining" cents={s.remaining} danger={s.remaining < 0} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Fig label="Planned" cents={s.planned} />
-        <Fig label="Actual to date" cents={s.actualToDate} danger={s.actualToDate > s.planned} />
-        <Fig label="Remaining" cents={s.remaining} />
-        <Card className="p-3">
-          <p className="text-xs text-muted-foreground">Variance on completed</p>
-          <Money
-            cents={s.varianceOnCompleted}
-            signed
-            size="md"
-            tone="auto"
-            className="!items-start"
-          />
-          <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+      <Card className="grid grid-cols-2 gap-x-6 gap-y-3 p-4 md:grid-cols-4">
+        <Minor label="Variance on completed">
+          <Money cents={s.varianceOnCompleted} signed tone="auto" className="items-start!" />
+          <p className="text-xs text-muted-foreground tabular-nums">
             Volume {f.primary(s.volumeVariance)} · Rate {f.primary(s.rateVariance)}
           </p>
-        </Card>
-        <Fig label="Still to spend" cents={s.stillToSpend} />
-        <Fig label="Projected balance" cents={s.projectedBalance} danger={s.projectedBalance < 0} />
-        <Fig label="Released by cancellation" cents={s.releasedByCancellation} />
-      </div>
+        </Minor>
+        <Minor label="Still to spend">
+          <Money cents={s.stillToSpend} className="items-start!" />
+        </Minor>
+        <Minor label="Projected balance">
+          <Money
+            cents={s.projectedBalance}
+            tone={s.projectedBalance < 0 ? "danger" : undefined}
+            className="items-start!"
+          />
+        </Minor>
+        <Minor label="Released by cancellation">
+          <Money cents={s.releasedByCancellation} className="items-start!" />
+        </Minor>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
@@ -195,22 +220,50 @@ function LineDetail() {
 
       <FinanceCard lineId={line.id} posted={line.financePostedCents} reported={s.actualToDate} />
       <LineEditor open={edit} onOpenChange={setEdit} line={line} />
-      <BulkDates open={bulk} onOpenChange={setBulk} events={events} />
+      <ScheduleDialog
+        line={scheduling ? line : null}
+        events={events}
+        period={d.period}
+        onClose={() => setScheduling(false)}
+      />
     </div>
   );
 }
 
-function Fig({ label, cents, danger }: { label: string; cents: number; danger?: boolean }) {
+function Headline({
+  label,
+  cents,
+  danger,
+  progress,
+  note,
+}: {
+  label: string;
+  cents: number;
+  danger?: boolean;
+  progress?: number;
+  note?: string;
+}) {
   return (
-    <Card className="p-3">
-      <p className="text-xs text-muted-foreground">{label}</p>
+    <Card className="space-y-1 p-4">
+      <p className="text-sm text-muted-foreground">{label}</p>
       <Money
         cents={cents}
-        size="md"
+        size="lg"
         tone={danger ? "danger" : undefined}
-        className="!items-start"
+        className="items-start!"
       />
+      {progress !== undefined && <Progress value={Math.min(progress, 100)} className="h-1.5" />}
+      {note && <p className="text-xs text-muted-foreground tabular-nums">{note}</p>}
     </Card>
+  );
+}
+
+function Minor({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      {children}
+    </div>
   );
 }
 
@@ -267,126 +320,5 @@ function FinanceCard({
         </p>
       </CardContent>
     </Card>
-  );
-}
-
-type Pattern = "monthly" | "quarterly" | "weeks" | "pick";
-function BulkDates({
-  open,
-  onOpenChange,
-  events,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  events: BudgetEvent[];
-}) {
-  const upd = useUpdateEvent();
-  const [pattern, setPattern] = useState<Pattern>("monthly");
-  const [start, setStart] = useState(todayISO());
-  const [n, setN] = useState(2);
-  const [picked, setPicked] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (open) {
-      setPattern("monthly");
-      setStart(todayISO());
-      setN(2);
-      setPicked({});
-    }
-  }, [open]);
-  const targets = events.filter((e) => e.status === "planned");
-  const dates = targets.map((e, i) => {
-    if (pattern === "pick") return picked[e.id] ?? e.plannedDate ?? "";
-    const base = parseISO(start);
-    const dt =
-      pattern === "monthly"
-        ? addMonths(base, i)
-        : pattern === "quarterly"
-          ? addMonths(base, i * 3)
-          : addWeeks(base, i * n);
-    return format(dt, "yyyy-MM-dd");
-  });
-  async function apply() {
-    for (let i = 0; i < targets.length; i++)
-      if (dates[i] !== (targets[i].plannedDate ?? ""))
-        await upd.mutateAsync({ id: targets[i].id, patch: { plannedDate: dates[i] || undefined } });
-    toast.success("Dates updated");
-    onOpenChange(false);
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Bulk set dates</DialogTitle>
-        </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          Applies to the {targets.length} planned event(s); done and cancelled events keep their
-          dates.
-        </p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label>Pattern</Label>
-            <Select value={pattern} onValueChange={(v) => setPattern(v as Pattern)}>
-              <SelectTrigger aria-label="Pattern">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">Monthly from a start date</SelectItem>
-                <SelectItem value="quarterly">Quarterly from a start date</SelectItem>
-                <SelectItem value="weeks">Every N weeks</SelectItem>
-                <SelectItem value="pick">Pick dates individually</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {pattern !== "pick" && (
-            <div className="space-y-1">
-              <Label htmlFor="bstart">Start date</Label>
-              <Input
-                id="bstart"
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-              />
-            </div>
-          )}
-          {pattern === "weeks" && (
-            <div className="space-y-1">
-              <Label htmlFor="bn">Every N weeks</Label>
-              <Input
-                id="bn"
-                type="number"
-                min={1}
-                value={n}
-                onChange={(e) => setN(Math.max(1, Number(e.target.value) || 1))}
-              />
-            </div>
-          )}
-        </div>
-        <ul className="space-y-1">
-          {targets.map((e, i) => (
-            <li key={e.id} className="flex items-center gap-2 text-sm">
-              <span className="w-6 text-right tabular-nums text-muted-foreground">
-                {e.sequence}
-              </span>
-              {pattern === "pick" ? (
-                <Input
-                  type="date"
-                  aria-label={`Date for occurrence ${e.sequence}`}
-                  value={dates[i]}
-                  onChange={(ev) => setPicked((p) => ({ ...p, [e.id]: ev.target.value }))}
-                  className="h-8"
-                />
-              ) : (
-                <span className="tabular-nums">{dates[i]}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-        <DialogFooter>
-          <Button onClick={apply} disabled={!targets.length}>
-            Apply dates
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
