@@ -1,4 +1,4 @@
-// Lovable Cloud persistence for the repositories: load the shared budget, write back row diffs.
+// Supabase persistence for the repositories: load the shared budget, write back row diffs.
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment, AuditEntry } from "@/lib/types";
 import { makeSeed, type StoreData } from "./seed";

@@ -1,4 +1,4 @@
-// Repository interfaces backed by Lovable Cloud.
+// Repository interfaces backed by Supabase.
 // UI must only reach these through hooks in src/data/hooks.ts.
 import type { Attachment, AuditEntry, BudgetEvent, BudgetLine, BudgetPeriod, Component } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
@@ -30,7 +30,7 @@ export interface AdminRepo { reset(): Promise<void>; importLines(rows: { compone
 
 import { loadRemote, syncRemote, uploadEvidence, signUrls, currentUserLabel, listAudit, removeEvidence } from "./remote";
 
-// Working copy of the shared budget. Every repo call reloads it from Lovable Cloud,
+// Working copy of the shared budget. Every repo call reloads it from Supabase,
 // applies the change in memory, then writes only the rows that changed back.
 let state: StoreData | null = null;
 let actor = "coordinator";
