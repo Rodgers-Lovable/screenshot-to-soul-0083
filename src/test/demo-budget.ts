@@ -1,13 +1,6 @@
-import type { Attachment, AuditEntry, BudgetEvent, BudgetLine, BudgetPeriod, Component, DurationUnit, QuantityUnit } from "@/lib/types";
-
-export interface StoreData {
-  period: BudgetPeriod | null;
-  components: Component[];
-  lines: BudgetLine[];
-  events: BudgetEvent[];
-  attachments: Attachment[];
-  audit: AuditEntry[];
-}
+// Sample budget used only as a test fixture.
+import type { Attachment, BudgetEvent, BudgetLine, BudgetPeriod, Component, DurationUnit, QuantityUnit } from "@/lib/types";
+import { eventTitle, type StoreData } from "@/data/store";
 
 type Row = [string, number, QuantityUnit, number, number, DurationUnit, number, string?];
 
@@ -43,8 +36,6 @@ const C2: Row[] = [
   ["Fuel for local movement", 2, "vehicles", 12000, 1, "one-off", 1],
 ];
 
-export const eventTitle = (desc: string, seq: number, occ: number) =>
-  occ === 1 ? desc : `${desc} – occurrence ${seq} of ${occ}`;
 
 const SHEET_SVG =
   "data:image/svg+xml;utf8," +

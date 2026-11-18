@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, Info, MoreHorizontal, Plus, Search } from "lucide-react";
+import { Check, ChevronDown, Copy, Info, MoreHorizontal, Pencil, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBudgetData, useCreateComponent, useDuplicateLine, useRemoveComponent, useRemoveLine } from "@/data/hooks";
+import { useBudgetData, useCreateComponent, useDuplicateLine, useRemoveComponent, useRemoveLine, useUpdateComponent } from "@/data/hooks";
 import { lineFlags, lineSummary, sumSummaries, type Summary } from "@/lib/calc";
 import { durationLabel } from "@/lib/format";
 import type { BudgetLine, Component } from "@/lib/types";
@@ -38,6 +38,7 @@ function BudgetPage() {
   const [del, setDel] = useState<BudgetLine | null>(null);
   const [compOpen, setCompOpen] = useState(false);
   const [delComp, setDelComp] = useState<Component | null>(null);
+  const [editComp, setEditComp] = useState<Component | null>(null);
 
   const sums = useMemo(() => new Map(d.lines.map((l) => [l.id, lineSummary(l, d.events)])), [d.lines, d.events]);
   const total = useMemo(() => sumSummaries([...sums.values()]), [sums]);
@@ -73,13 +74,14 @@ function BudgetPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Component actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setEditComp(c)}><Pencil className="h-4 w-4" />Edit component</DropdownMenuItem>
                     <DropdownMenuItem className="text-destructive" onSelect={() => setDelComp(c)}>Delete component</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
               <CollapsibleContent>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1100px] text-sm">
+                  <table className="w-full min-w-275 text-sm">
                     <thead className="bg-muted/60 text-xs text-muted-foreground">
                       <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-medium">
                         <th className="text-left">Description</th><th className="text-right">Qty</th><th className="text-left">Unit</th><th className="text-right">Unit cost</th>
@@ -125,7 +127,8 @@ function BudgetPage() {
       <LineEditor open={editor.open} onOpenChange={(o) => setEditor((e) => ({ ...e, open: o }))} line={editor.line} componentId={editor.componentId} />
       <DeleteLineDialog line={del} onClose={() => setDel(null)} hasDone={!!del && d.events.some((e) => e.lineId === del.id && e.status === "done")} />
       <DeleteComponentDialog component={delComp} onClose={() => setDelComp(null)} lineCount={delComp ? d.lines.filter((l) => l.componentId === delComp.id).length : 0} eventCount={delComp ? d.events.filter((e) => d.lines.some((l) => l.id === e.lineId && l.componentId === delComp.id)).length : 0} />
-      <AddComponentDialog open={compOpen} onOpenChange={setCompOpen} nextCode={String(d.components.length + 1)} />
+      <ComponentDialog open={compOpen} onOpenChange={setCompOpen} nextCode={String(d.components.length + 1)} />
+      <ComponentDialog open={!!editComp} onOpenChange={(o) => { if (!o) setEditComp(null); }} nextCode="" component={editComp} />
     </div>
   );
 }
@@ -189,9 +192,10 @@ function DeleteLineDialog({ line, onClose, hasDone }: { line: BudgetLine | null;
           <DialogDescription>This deletes “{line?.description}”, its events and their evidence files.</DialogDescription>
         </DialogHeader>
         {hasDone && (
-          <div className="space-y-1">
-            <Label htmlFor="confirm-name">This line has completed events. Type the line name to confirm.</Label>
-            <Input id="confirm-name" value={typed} onChange={(e) => setTyped(e.target.value)} />
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">This line has completed events.</p>
+            <ConfirmLabel id="confirm-name" text={line?.description} />
+            <Input id="confirm-name" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={line?.description} autoComplete="off" />
           </div>
         )}
         <DialogFooter>
@@ -203,24 +207,53 @@ function DeleteLineDialog({ line, onClose, hasDone }: { line: BudgetLine | null;
   );
 }
 
-function AddComponentDialog({ open, onOpenChange, nextCode }: { open: boolean; onOpenChange: (o: boolean) => void; nextCode: string }) {
+function ComponentDialog({ open, onOpenChange, nextCode, component }: { open: boolean; onOpenChange: (o: boolean) => void; nextCode: string; component?: Component | null }) {
   const create = useCreateComponent();
+  const update = useUpdateComponent();
   const [name, setName] = useState("");
   const [code, setCode] = useState(nextCode);
-  useEffect(() => { if (open) { setCode(nextCode); setName(""); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) { setCode(component?.code ?? nextCode); setName(component?.name ?? ""); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  const done = (msg: string) => ({ onSuccess: () => { toast.success(msg); onOpenChange(false); }, onError: (e: Error) => toast.error(e.message) });
+  const save = () => {
+    const input = { code: code.trim(), name: name.trim() };
+    if (component) update.mutate({ id: component.id, patch: input }, done("Component updated"));
+    else create.mutate(input, done("Component added"));
+  };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add component</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{component ? "Edit component" : "Add component"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-[80px_1fr] gap-3">
           <div className="space-y-1"><Label htmlFor="ccode">Code</Label><Input id="ccode" value={code} onChange={(e) => setCode(e.target.value)} /></div>
           <div className="space-y-1"><Label htmlFor="cname">Name</Label><Input id="cname" value={name} onChange={(e) => setName(e.target.value)} /></div>
         </div>
         <DialogFooter>
-          <Button disabled={!name.trim()} onClick={() => create.mutate({ code: code.trim(), name: name.trim() }, { onSuccess: () => { toast.success("Component added"); onOpenChange(false); } })}>Add</Button>
+          <Button disabled={!name.trim() || create.isPending || update.isPending} onClick={save}>{component ? "Save" : "Add"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ConfirmLabel({ id, text }: { id: string; text?: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = (e: React.MouseEvent) => {
+    // Stop the label from moving focus to the input.
+    e.preventDefault();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+      () => toast.error("Could not copy"),
+    );
+  };
+  return (
+    <Label htmlFor={id} className="block text-sm/6 font-normal text-muted-foreground">
+      Type <code className="rounded bg-muted box-decoration-clone px-1 py-0.5 font-mono text-xs text-foreground">{text}</code>
+      <button type="button" onClick={copy} aria-label={copied ? "Copied" : "Copy name"} className="mx-1 inline-flex size-5 items-center justify-center rounded align-middle text-muted-foreground hover:bg-muted hover:text-foreground">
+        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      </button>
+      to confirm.
+    </Label>
   );
 }
 
@@ -239,9 +272,9 @@ function DeleteComponentDialog({ component, onClose, lineCount, eventCount }: { 
             This permanently deletes “{component?.code}. {component?.name}” with its {lineCount} line{lineCount === 1 ? "" : "s"}, {eventCount} event{eventCount === 1 ? "" : "s"} and all their evidence files.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-1">
-          <Label htmlFor="confirm-comp">Type the component name to confirm.</Label>
-          <Input id="confirm-comp" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={component?.name} />
+        <div className="space-y-2">
+          <ConfirmLabel id="confirm-comp" text={component?.name} />
+          <Input id="confirm-comp" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={component?.name} autoComplete="off" />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={close}>Cancel</Button>

@@ -81,7 +81,7 @@ function LineDetail() {
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Events</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[1000px] text-sm">
+          <table className="w-full min-w-250 text-sm">
             <thead className="bg-muted/60 text-xs text-muted-foreground">
               <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-medium">
                 <th className="text-right">#</th><th className="text-left">Title</th><th className="text-left">Planned date</th><th className="text-left">Location</th><th className="text-left">Status</th>
@@ -97,7 +97,7 @@ function LineDetail() {
                 return (
                   <tr key={e.id} className="h-10 border-t [&>td]:px-3 [&>td]:py-1">
                     <td className="num">{e.sequence}</td>
-                    <td><div className="max-w-[260px] truncate">{e.title}</div><Flags flags={eventFlags(e, n, today)} /></td>
+                    <td><div className="max-w-65 truncate">{e.title}</div><Flags flags={eventFlags(e, n, today)} /></td>
                     <td className="tabular-nums">{e.plannedDate ?? "—"}</td>
                     <td>{e.location ?? ""}</td>
                     <td><StatusChip status={e.status} /></td>

@@ -1,24 +1,48 @@
-# Project-Study Budget tracker
+# Study Budget Tracker
 
-Implement exactly the screenshot and nothing else
+Tracks a project budget in Kenyan shillings. Plan components and budget lines, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
 
-This project was built with [Lovable](https://lovable.dev).
+Built with TanStack Start, React 19, Tailwind v4 and shadcn/ui. Data, sign-in and evidence files live in a Supabase project.
 
-## Build with Lovable
+## Setup
 
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/5e2f9544-81bf-4453-8aae-cb2353a1e3a9).
+You need Node 24 and a Supabase project.
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+1. Install dependencies:
 
-## Development
+   ```sh
+   npm install
+   ```
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+2. Copy `.env.example` to `.env` and fill in the project URL and publishable key from Supabase (Project Settings, API).
 
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
-```
+3. Apply the database schema. Add `SUPABASE_DB_URL` to `.env` (dashboard, Connect, Session pooler, with your database password), then:
+
+   ```sh
+   npm run db:push   # runs everything in supabase/migrations
+   ```
+
+4. In the Supabase dashboard, open Authentication, URL Configuration. Set the Site URL to where the app runs (`http://localhost:8080` for local work) and add it to the redirect URLs, so confirmation emails link back to the app.
+
+5. Start the app:
+
+   ```sh
+   npm run dev
+   ```
+
+The first person to sign in claims the team and becomes admin. Everyone else signs up, then a team member adds them under Settings, Team. An account that has not been added sees a waiting screen.
+
+## Scripts
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Dev server on port 8080 |
+| `npm run build` | Production build (Nitro server in `.output/`) |
+| `npm test` | Vitest |
+| `npm run lint` | ESLint |
+| `npm run db:push` | Apply new migrations to the database in `SUPABASE_DB_URL` |
+| `npm run db:types` | Regenerate `src/integrations/supabase/types.ts` from that database |
+
+## Changing the schema
+
+Add a new timestamped SQL file to `supabase/migrations/`, run `npm run db:push`, then `npm run db:types`. Don't edit a migration that has already been applied.

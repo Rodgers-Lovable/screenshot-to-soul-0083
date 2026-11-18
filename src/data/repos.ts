@@ -1,8 +1,8 @@
-// Repository interfaces backed by Lovable Cloud.
+// Repository interfaces backed by Supabase.
 // UI must only reach these through hooks in src/data/hooks.ts.
 import type { Attachment, AuditEntry, BudgetEvent, BudgetLine, BudgetPeriod, Component } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
-import { eventTitle, makeSeed, type StoreData } from "./seed";
+import { eventTitle, type StoreData } from "./store";
 
 export interface PeriodRepo { get(): Promise<BudgetPeriod | null>; update(patch: Partial<BudgetPeriod>): Promise<BudgetPeriod> }
 export interface ComponentRepo {
@@ -26,11 +26,11 @@ export interface AttachmentRepo {
   remove(id: string): Promise<void>;
 }
 export interface AuditRepo { list(): Promise<AuditEntry[]> }
-export interface AdminRepo { reset(): Promise<void>; importLines(rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[]): Promise<number> }
+export interface AdminRepo { importLines(rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[]): Promise<number> }
 
 import { loadRemote, syncRemote, uploadEvidence, signUrls, currentUserLabel, listAudit, removeEvidence } from "./remote";
 
-// Working copy of the shared budget. Every repo call reloads it from Lovable Cloud,
+// Working copy of the shared budget. Every repo call reloads it from Supabase,
 // applies the change in memory, then writes only the rows that changed back.
 let state: StoreData | null = null;
 let actor = "coordinator";
@@ -181,7 +181,6 @@ export const attachmentRepo: AttachmentRepo = {
 export const auditRepo: AuditRepo = { list: () => listAudit() };
 
 export const adminRepo: AdminRepo = {
-  reset: () => tx(() => { const s = makeSeed(); s.audit = [...db().audit]; state = s; audit("period", "p1", "(reset to demo)", null, "demo data"); }),
   importLines: (rows) => tx(() => {
     const d = db(); const created = new Map<string, string>();
     for (const r of rows) {
