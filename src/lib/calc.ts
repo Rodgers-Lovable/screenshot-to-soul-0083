@@ -14,7 +14,8 @@ export function actualInputs(line: BudgetLine, ev: BudgetEvent) {
   };
 }
 
-export const eventPlanned = (line: BudgetLine) => Math.round(line.quantity * line.unitCostCents * line.duration);
+export const eventPlanned = (line: BudgetLine) =>
+  Math.round(line.quantity * line.unitCostCents * line.duration);
 
 export interface EventFigures {
   planned: number;
@@ -26,7 +27,8 @@ export interface EventFigures {
 
 export function eventFigures(line: BudgetLine, ev: BudgetEvent): EventFigures {
   const planned = eventPlanned(line);
-  if (ev.status !== "done") return { planned, actual: 0, volumeVariance: 0, rateVariance: 0, variance: 0 };
+  if (ev.status !== "done")
+    return { planned, actual: 0, volumeVariance: 0, rateVariance: 0, variance: 0 };
   const { q1, r1, d1 } = actualInputs(line, ev);
   const q0d0 = line.quantity * line.duration;
   const q1d1 = q1 * d1;
@@ -52,11 +54,21 @@ export interface Summary {
 }
 
 export const emptySummary = (): Summary => ({
-  planned: 0, actualToDate: 0, plannedForCompleted: 0, varianceOnCompleted: 0, volumeVariance: 0,
-  rateVariance: 0, remaining: 0, stillToSpend: 0, projectedBalance: 0, releasedByCancellation: 0, progressPct: 0,
+  planned: 0,
+  actualToDate: 0,
+  plannedForCompleted: 0,
+  varianceOnCompleted: 0,
+  volumeVariance: 0,
+  rateVariance: 0,
+  remaining: 0,
+  stillToSpend: 0,
+  projectedBalance: 0,
+  releasedByCancellation: 0,
+  progressPct: 0,
 });
 
-export const linePlanned = (line: BudgetLine) => Math.round(line.quantity * line.unitCostCents * line.duration * line.occurrences);
+export const linePlanned = (line: BudgetLine) =>
+  Math.round(line.quantity * line.unitCostCents * line.duration * line.occurrences);
 
 export function lineSummary(line: BudgetLine, events: BudgetEvent[]): Summary {
   const s = emptySummary();
@@ -86,8 +98,12 @@ function finish(s: Summary): Summary {
 export function sumSummaries(list: Summary[]): Summary {
   const s = emptySummary();
   for (const x of list) {
-    s.planned += x.planned; s.actualToDate += x.actualToDate; s.plannedForCompleted += x.plannedForCompleted;
-    s.volumeVariance += x.volumeVariance; s.rateVariance += x.rateVariance; s.stillToSpend += x.stillToSpend;
+    s.planned += x.planned;
+    s.actualToDate += x.actualToDate;
+    s.plannedForCompleted += x.plannedForCompleted;
+    s.volumeVariance += x.volumeVariance;
+    s.rateVariance += x.rateVariance;
+    s.stillToSpend += x.stillToSpend;
     s.releasedByCancellation += x.releasedByCancellation;
   }
   return finish(s);
@@ -97,9 +113,19 @@ export const periodSummary = (lines: BudgetLine[], events: BudgetEvent[]) =>
   sumSummaries(lines.map((l) => lineSummary(l, events)));
 
 export type BurnStatus = "On track" | "Behind plan" | "Ahead of plan";
-export interface Burn { spentPct: number; timeElapsedPct: number; plannedToDatePct: number; status: BurnStatus }
+export interface Burn {
+  spentPct: number;
+  timeElapsedPct: number;
+  plannedToDatePct: number;
+  status: BurnStatus;
+}
 
-export function burnRate(period: BudgetPeriod, lines: BudgetLine[], events: BudgetEvent[], today: string): Burn {
+export function burnRate(
+  period: BudgetPeriod,
+  lines: BudgetLine[],
+  events: BudgetEvent[],
+  today: string,
+): Burn {
   const total = periodSummary(lines, events);
   const byId = new Map(lines.map((l) => [l.id, l]));
   let plannedToDate = 0;
@@ -112,11 +138,13 @@ export function burnRate(period: BudgetPeriod, lines: BudgetLine[], events: Budg
   const span = daysBetween(period.startDate, period.endDate);
   const timeElapsedPct = span > 0 ? clamp(daysBetween(period.startDate, today) / span, 0, 1) : 0;
   const diff = spentPct - plannedToDatePct;
-  const status: BurnStatus = Math.abs(diff) <= 0.1 + 1e-9 ? "On track" : diff < 0 ? "Behind plan" : "Ahead of plan";
+  const status: BurnStatus =
+    Math.abs(diff) <= 0.1 + 1e-9 ? "On track" : diff < 0 ? "Behind plan" : "Ahead of plan";
   return { spentPct, timeElapsedPct, plannedToDatePct, status };
 }
 
-export type FlagKind = "over-budget" | "projected-overrun" | "overdue" | "no-date" | "missing-evidence";
+export type FlagKind =
+  "over-budget" | "projected-overrun" | "overdue" | "no-date" | "missing-evidence";
 export const FLAG_LABEL: Record<FlagKind, string> = {
   "over-budget": "Over budget",
   "projected-overrun": "Projected overrun",
@@ -145,17 +173,32 @@ export function periodMonths(period: BudgetPeriod): string[] {
   const out: string[] = [];
   const [sy, sm] = period.startDate.split("-").map(Number);
   const [ey, em] = period.endDate.split("-").map(Number);
-  let y = sy, m = sm;
+  let y = sy,
+    m = sm;
   // Period starting on the 30th of a month is treated as starting the following month.
-  if (Number(period.startDate.slice(8)) >= 28) { m++; if (m > 12) { m = 1; y++; } }
+  if (Number(period.startDate.slice(8)) >= 28) {
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
   while (y < ey || (y === ey && m <= em)) {
     out.push(`${y}-${String(m).padStart(2, "0")}`);
-    m++; if (m > 12) { m = 1; y++; }
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
   }
   return out;
 }
 
-export function cumulativeByMonth(period: BudgetPeriod, lines: BudgetLine[], events: BudgetEvent[]) {
+export function cumulativeByMonth(
+  period: BudgetPeriod,
+  lines: BudgetLine[],
+  events: BudgetEvent[],
+) {
   const months = periodMonths(period);
   const byId = new Map(lines.map((l) => [l.id, l]));
   const planned = new Map<string, number>();
@@ -169,11 +212,15 @@ export function cumulativeByMonth(period: BudgetPeriod, lines: BudgetLine[], eve
       planned.set(k, (planned.get(k) ?? 0) + f.planned);
     }
     if (ev.status === "done") {
-      const k = clampMonth((ev.actualDate ?? ev.plannedDate ?? period.startDate).slice(0, 7), months);
+      const k = clampMonth(
+        (ev.actualDate ?? ev.plannedDate ?? period.startDate).slice(0, 7),
+        months,
+      );
       actual.set(k, (actual.get(k) ?? 0) + f.actual);
     }
   }
-  let cp = 0, ca = 0;
+  let cp = 0,
+    ca = 0;
   return months.map((m) => {
     cp += planned.get(m) ?? 0;
     ca += actual.get(m) ?? 0;
@@ -189,15 +236,96 @@ function clampMonth(k: string, months: string[]) {
 }
 
 /** Event count change needed when occurrences change. Throws if impossible. */
-export function planOccurrenceChange(events: BudgetEvent[], newOcc: number): { add: number; removeIds: string[] } {
+export function planOccurrenceChange(
+  events: BudgetEvent[],
+  newOcc: number,
+): { add: number; removeIds: string[] } {
   const current = events.length;
   if (newOcc >= current) return { add: newOcc - current, removeIds: [] };
   const need = current - newOcc;
-  const removable = events.filter((e) => e.status === "planned").sort((a, b) => b.sequence - a.sequence);
+  const removable = events
+    .filter((e) => e.status === "planned")
+    .sort((a, b) => b.sequence - a.sequence);
   if (removable.length < need) {
     throw new Error(
       `Can't reduce to ${newOcc}: only ${removable.length} planned event(s) can be removed; the others are done or cancelled.`,
     );
   }
   return { add: 0, removeIds: removable.slice(0, need).map((e) => e.id) };
+}
+
+export const addDaysISO = (iso: string, n: number) =>
+  new Date(toTime(iso) + n * DAY).toISOString().slice(0, 10);
+
+/** Adds months, clamping to the month's last day (Jan 31 + 1 month = Feb 28). */
+export function addMonthsISO(iso: string, n: number): string {
+  const [y = 0, m = 1, d = 1] = iso.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(d, last));
+  return first.toISOString().slice(0, 10);
+}
+
+export interface Repeat {
+  every: number;
+  unit: "months" | "weeks";
+}
+
+/** Dates for occurrences 1..count. Each is counted from the first date so month ends don't drift. */
+export function scheduleDates(first: string, count: number, r: Repeat): string[] {
+  return Array.from({ length: count }, (_, i) =>
+    r.unit === "months" ? addMonthsISO(first, i * r.every) : addDaysISO(first, i * 7 * r.every),
+  );
+}
+
+export type EventTab = "action" | "month" | "upcoming" | "done" | "all";
+export const UPCOMING_DAYS = 60;
+
+/** Whether an event belongs on a tab of the Events page. */
+export function inEventTab(ev: BudgetEvent, flags: FlagKind[], tab: EventTab, today: string) {
+  switch (tab) {
+    case "action":
+      return flags.some((f) => f === "overdue" || f === "no-date" || f === "missing-evidence");
+    case "month": {
+      const m = today.slice(0, 7);
+      return (
+        (ev.actualDate ?? ev.plannedDate ?? "").startsWith(m) || !!ev.plannedDate?.startsWith(m)
+      );
+    }
+    case "upcoming":
+      return (
+        ev.status === "planned" &&
+        !!ev.plannedDate &&
+        ev.plannedDate >= today &&
+        ev.plannedDate <= addDaysISO(today, UPCOMING_DAYS)
+      );
+    case "done":
+      return ev.status === "done";
+    default:
+      return true;
+  }
+}
+
+export interface LineProgress {
+  total: number;
+  done: number;
+  cancelled: number;
+  undated: number;
+  /** Earliest planned date from today on. */
+  next?: string;
+}
+
+export function lineProgress(events: BudgetEvent[], today: string): LineProgress {
+  const planned = events.filter((e) => e.status === "planned");
+  const next = planned
+    .map((e) => e.plannedDate)
+    .filter((d): d is string => !!d && d >= today)
+    .sort()[0];
+  return {
+    total: events.length,
+    done: events.filter((e) => e.status === "done").length,
+    cancelled: events.filter((e) => e.status === "cancelled").length,
+    undated: planned.filter((e) => !e.plannedDate).length,
+    next,
+  };
 }

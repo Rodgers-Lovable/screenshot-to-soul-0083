@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAddAttachment, useBudgetData, useRemoveAttachment, useUpdateEvent } from "@/data/hooks";
 import { eventFigures, eventPlanned } from "@/lib/calc";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
@@ -30,7 +36,8 @@ type FormOut = z.output<typeof schema>;
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx";
 const OK_TYPES = /\.(pdf|jpe?g|png|xlsx)$/i;
 const MAX = 10 * 1024 * 1024;
-const unitWord = (u: string, n: number) => (u === "pax" ? (n === 1 ? "participant" : "participants") : u);
+const unitWord = (u: string, n: number) =>
+  u === "pax" ? (n === 1 ? "participant" : "participants") : u;
 
 export function RecordActualsForm({ eventId, onDone }: { eventId: string; onDone?: () => void }) {
   const data = useBudgetData();
@@ -67,17 +74,32 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   });
   const w = useWatch({ control: form.control });
   const live = useMemo(() => {
-    const q = Number(w.quantity) || 0, r = kesToCents(Number(w.unitCost) || 0), d = Number(w.duration) || 0;
-    return eventFigures(line, { ...ev, status: "done", actualQuantity: q, actualUnitCostCents: r, actualDuration: d });
+    const q = Number(w.quantity) || 0,
+      r = kesToCents(Number(w.unitCost) || 0),
+      d = Number(w.duration) || 0;
+    return eventFigures(line, {
+      ...ev,
+      status: "done",
+      actualQuantity: q,
+      actualUnitCostCents: r,
+      actualDuration: d,
+    });
   }, [w.quantity, w.unitCost, w.duration, line, ev]);
 
   const explain = (() => {
-    const q = Number(w.quantity) || 0, d = Number(w.duration) || 0;
+    const q = Number(w.quantity) || 0,
+      d = Number(w.duration) || 0;
     const parts: string[] = [];
     const dq = line.quantity - q;
-    if (dq) parts.push(`${Math.abs(dq)} ${dq > 0 ? "fewer" : "more"} ${unitWord(line.quantityUnit, Math.abs(dq))} than planned`);
+    if (dq)
+      parts.push(
+        `${Math.abs(dq)} ${dq > 0 ? "fewer" : "more"} ${unitWord(line.quantityUnit, Math.abs(dq))} than planned`,
+      );
     const dd = line.duration - d;
-    if (dd && line.durationUnit !== "one-off") parts.push(`${Math.abs(dd)} ${dd > 0 ? "fewer" : "more"} ${line.durationUnit === "days" ? "day(s)" : "month(s)"}`);
+    if (dd && line.durationUnit !== "one-off")
+      parts.push(
+        `${Math.abs(dd)} ${dd > 0 ? "fewer" : "more"} ${line.durationUnit === "days" ? "day(s)" : "month(s)"}`,
+      );
     const dr = line.unitCostCents - kesToCents(Number(w.unitCost) || 0);
     if (dr) parts.push(`unit cost ${f.primary(Math.abs(dr))} ${dr > 0 ? "lower" : "higher"}`);
     if (!live.variance) return "Exactly on plan.";
@@ -88,16 +110,25 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
     if (!list) return;
     const next: { file: File; label: string }[] = [];
     for (const file of Array.from(list)) {
-      if (!OK_TYPES.test(file.name)) { toast.error(`${file.name}: only PDF, JPG, PNG or XLSX`); continue; }
-      if (file.size > MAX) { toast.error(`${file.name} is over 10 MB`); continue; }
+      if (!OK_TYPES.test(file.name)) {
+        toast.error(`${file.name}: only PDF, JPG, PNG or XLSX`);
+        continue;
+      }
+      if (file.size > MAX) {
+        toast.error(`${file.name} is over 10 MB`);
+        continue;
+      }
       next.push({ file, label: "" });
     }
     setPending((p) => [...p, ...next]);
   }
 
   async function uploadPending() {
-    for (const p of pending) await addAtt.mutateAsync({ eventId: ev.id, file: p.file, label: p.label || undefined });
-    const n = pending.length; setPending([]); return n;
+    for (const p of pending)
+      await addAtt.mutateAsync({ eventId: ev.id, file: p.file, label: p.label || undefined });
+    const n = pending.length;
+    setPending([]);
+    return n;
   }
 
   async function save(status: EventStatus, extraNotes?: string) {
@@ -110,16 +141,30 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
         id: ev.id,
         patch: {
           status,
-          actualDate: status === "planned" && ev.status === "planned" ? ev.actualDate : v.actualDate,
-          actualQuantity: v.quantity, actualUnitCostCents: kesToCents(v.unitCost), actualDuration: v.duration,
+          actualDate:
+            status === "planned" && ev.status === "planned" ? ev.actualDate : v.actualDate,
+          actualQuantity: v.quantity,
+          actualUnitCostCents: kesToCents(v.unitCost),
+          actualDuration: v.duration,
           location: v.location || undefined,
-          notes: extraNotes !== undefined ? [v.notes, `Cancelled: ${extraNotes}`].filter(Boolean).join("\n") : v.notes || undefined,
+          notes:
+            extraNotes !== undefined
+              ? [v.notes, `Cancelled: ${extraNotes}`].filter(Boolean).join("\n")
+              : v.notes || undefined,
         },
       });
-      if (status === "done" && files.length + added === 0) toast.warning("Saved as done without evidence. Attach an attendance sheet or receipt when you can.");
-      else toast.success(status === "done" ? "Marked done" : status === "cancelled" ? "Event cancelled" : "Saved");
+      if (status === "done" && files.length + added === 0)
+        toast.warning(
+          "Saved as done without evidence. Attach an attendance sheet or receipt when you can.",
+        );
+      else
+        toast.success(
+          status === "done" ? "Marked done" : status === "cancelled" ? "Event cancelled" : "Saved",
+        );
       onDone?.();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Could not save"); }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    }
   }
 
   async function reopen() {
@@ -131,10 +176,19 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
     <div className="space-y-1">
       <Label htmlFor={name}>{label}</Label>
       <div className="flex items-center gap-2">
-        <Input id={name} type="number" inputMode="decimal" step="any" className="tabular-nums" {...form.register(name)} />
+        <Input
+          id={name}
+          type="number"
+          inputMode="decimal"
+          step="any"
+          className="tabular-nums"
+          {...form.register(name)}
+        />
         <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span>
       </div>
-      {form.formState.errors[name] && <p className="text-xs text-destructive">{form.formState.errors[name]?.message}</p>}
+      {form.formState.errors[name] && (
+        <p className="text-xs text-destructive">{form.formState.errors[name]?.message}</p>
+      )}
     </div>
   );
 
@@ -142,19 +196,26 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip status={ev.status} />
-        <span className="text-sm text-muted-foreground">Planned {ev.plannedDate ?? "— no date"}</span>
+        <span className="text-sm text-muted-foreground">
+          Planned {ev.plannedDate ?? "— no date"}
+        </span>
       </div>
 
       <section className="rounded-md border bg-muted/50 p-3">
-        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Planned</h3>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Planned
+        </h3>
         <p className="text-sm tabular-nums">
-          {line.quantity} {line.quantityUnit} × {f.kes(line.unitCostCents)} × {durationLabel(line.duration, line.durationUnit)} ={" "}
+          {line.quantity} {line.quantityUnit} × {f.kes(line.unitCostCents)} ×{" "}
+          {durationLabel(line.duration, line.durationUnit)} ={" "}
           <strong>{f.primary(eventPlanned(line))}</strong>
         </p>
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actual</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Actual
+        </h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label htmlFor="actualDate">Actual date</Label>
@@ -185,56 +246,141 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
       </section>
 
       <section className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Evidence
+        </h3>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDrag(true);
+          }}
           onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDrag(false);
+            addFiles(e.dataTransfer.files);
+          }}
           className={`flex w-full flex-col items-center gap-1 rounded-md border-2 border-dashed p-4 text-sm text-muted-foreground transition-colors ${drag ? "border-primary bg-accent" : "border-border"}`}
         >
           <FileUp className="h-5 w-5" aria-hidden />
           Drop files or tap to choose · PDF, JPG, PNG, XLSX up to 10 MB
         </button>
-        <input ref={inputRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="hidden"
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
         {pending.map((p, i) => (
           <div key={i} className="flex items-center gap-2 rounded border bg-muted/40 p-2">
             <span className="min-w-0 flex-1 truncate text-sm">{p.file.name}</span>
-            <Input placeholder="Label, e.g. Signed attendance list" aria-label={`Label for ${p.file.name}`} value={p.label} className="h-8 w-40 sm:w-56"
-              onChange={(e) => setPending((all) => all.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-            <Button size="icon" variant="ghost" aria-label="Remove" onClick={() => setPending((all) => all.filter((_, j) => j !== i))}><X className="h-4 w-4" /></Button>
+            <Input
+              placeholder="Label, e.g. Signed attendance list"
+              aria-label={`Label for ${p.file.name}`}
+              value={p.label}
+              className="h-8 w-40 sm:w-56"
+              onChange={(e) =>
+                setPending((all) =>
+                  all.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)),
+                )
+              }
+            />
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Remove"
+              onClick={() => setPending((all) => all.filter((_, j) => j !== i))}
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
         ))}
-        {pending.length > 0 && <p className="text-xs text-muted-foreground">New files upload when you save.</p>}
+        {pending.length > 0 && (
+          <p className="text-xs text-muted-foreground">New files upload when you save.</p>
+        )}
         {files.map((a) => (
           <div key={a.id} className="flex items-center gap-2 rounded border p-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm">{a.label ?? a.fileName}</p>
-              <p className="truncate text-xs text-muted-foreground">{a.fileName} · {Math.ceil(a.sizeBytes / 1024)} KB</p>
+              <p className="truncate text-xs text-muted-foreground">
+                {a.fileName} · {Math.ceil(a.sizeBytes / 1024)} KB
+              </p>
             </div>
-            <Button asChild size="icon" variant="ghost" aria-label="Preview"><a href={a.fileUrl} target="_blank" rel="noreferrer"><Eye className="h-4 w-4" /></a></Button>
-            <Button asChild size="icon" variant="ghost" aria-label="Download"><a href={a.fileUrl} download={a.fileName}><Download className="h-4 w-4" /></a></Button>
-            <Button size="icon" variant="ghost" aria-label="Remove file" onClick={() => rmAtt.mutate(a.id)}><Trash2 className="h-4 w-4" /></Button>
+            <Button asChild size="icon" variant="ghost" aria-label="Preview">
+              <a href={a.fileUrl} target="_blank" rel="noreferrer">
+                <Eye className="h-4 w-4" />
+              </a>
+            </Button>
+            <Button asChild size="icon" variant="ghost" aria-label="Download">
+              <a href={a.fileUrl} download={a.fileName}>
+                <Download className="h-4 w-4" />
+              </a>
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Remove file"
+              onClick={() => rmAtt.mutate(a.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         ))}
       </section>
 
       <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
-        {ev.status !== "planned" && <Button variant="outline" onClick={reopen}>Reopen</Button>}
-        {ev.status !== "cancelled" && <Button variant="outline" onClick={() => { setReason(""); setCancelOpen(true); }}>Mark cancelled</Button>}
-        <Button variant="secondary" onClick={() => save(ev.status === "done" ? "done" : "planned")}>Save without completing</Button>
-        <Button onClick={() => save("done")} disabled={update.isPending}>Mark done</Button>
+        {ev.status !== "planned" && (
+          <Button variant="outline" onClick={reopen}>
+            Reopen
+          </Button>
+        )}
+        {ev.status !== "cancelled" && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setReason("");
+              setCancelOpen(true);
+            }}
+          >
+            Mark cancelled
+          </Button>
+        )}
+        <Button variant="secondary" onClick={() => save(ev.status === "done" ? "done" : "planned")}>
+          Save without completing
+        </Button>
+        <Button onClick={() => save("done")} disabled={update.isPending}>
+          Mark done
+        </Button>
       </div>
 
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Cancel this event?</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Cancel this event?</DialogTitle>
+          </DialogHeader>
           <Label htmlFor="reason">Reason</Label>
           <Textarea id="reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelOpen(false)}>Back</Button>
-            <Button variant="destructive" disabled={!reason.trim()} onClick={() => { setCancelOpen(false); void save("cancelled", reason.trim()); }}>Mark cancelled</Button>
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>
+              Back
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!reason.trim()}
+              onClick={() => {
+                setCancelOpen(false);
+                void save("cancelled", reason.trim());
+              }}
+            >
+              Mark cancelled
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -242,7 +388,17 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   );
 }
 
-function Fig({ label, cents, signed, tone }: { label: string; cents: number; signed?: boolean; tone?: boolean }) {
+function Fig({
+  label,
+  cents,
+  signed,
+  tone,
+}: {
+  label: string;
+  cents: number;
+  signed?: boolean;
+  tone?: boolean;
+}) {
   return (
     <div className="flex items-start justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
