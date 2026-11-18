@@ -11,7 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useAudit, useBudgetData, useImportLines, useUpdatePeriod } from "@/data/hooks";
 import { exportWorkbook, parseBudgetRows, readWorkbook, type ParsedBlock, type ParsedRow } from "@/lib/excel";
-import { formatKES, kesToCents } from "@/lib/format";
+import { formatKES, kesToCents, todayISO } from "@/lib/format";
+import { clamp, daysBetween, periodSummary } from "@/lib/calc";
+import { Progress } from "@/components/ui/progress";
+import { Money } from "@/components/app/currency";
 import { DURATION_UNITS, QUANTITY_UNITS, type BudgetPeriod, type DurationUnit, type QuantityUnit } from "@/lib/types";
 import { PageHeader } from "@/components/app/shell";
 import { TeamPanel } from "@/components/app/team-panel";
@@ -88,6 +91,8 @@ function PeriodForm() {
           <Button onClick={save} disabled={invalid}>Save period</Button>
         </CardContent>
       </Card>
+
+      <PeriodGlance />
 
       <AlertDialog open={confirmFx} onOpenChange={setConfirmFx}>
         <AlertDialogContent>
@@ -211,6 +216,49 @@ function ExportPanel() {
     <Card>
       <CardHeader><CardTitle className="text-base">Export to Excel</CardTitle><CardDescription>One sheet per component, a summary sheet with carryover per line and component, and an events sheet.</CardDescription></CardHeader>
       <CardContent><Button disabled={!d.period} onClick={() => d.period && exportWorkbook(d.period, d.components, d.lines, d.events, d.attachments)}><Download className="h-4 w-4" />Download .xlsx</Button></CardContent>
+    </Card>
+  );
+}
+
+function PeriodGlance() {
+  const { period, components, lines, events } = useBudgetData();
+  const { data: audit = [] } = useAudit();
+  const total = useMemo(() => periodSummary(lines, events), [lines, events]);
+  const lastChange = useMemo(() => audit.reduce<string | null>((max, a) => (!max || a.changedAt > max ? a.changedAt : max), null), [audit]);
+  if (!period?.startDate || !period.endDate) return null;
+
+  const today = todayISO();
+  const span = Math.max(daysBetween(period.startDate, period.endDate), 1);
+  const elapsed = clamp(daysBetween(period.startDate, today), 0, span);
+  const counts: [string, number][] = [["Components", components.length], ["Lines", lines.length], ["Events", events.length]];
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Period at a glance</CardTitle></CardHeader>
+      <CardContent className="space-y-5">
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>{elapsed} of {span} days elapsed</span>
+            <span className="text-muted-foreground">{span - elapsed} left</span>
+          </div>
+          <Progress value={(elapsed / span) * 100} />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {counts.map(([label, n]) => (
+            <div key={label} className="rounded-md border px-3 py-2">
+              <div className="text-xl font-semibold tabular-nums">{n}</div>
+              <div className="text-xs text-muted-foreground">{label}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-end justify-between border-t pt-4">
+          <span className="text-sm text-muted-foreground">Total planned</span>
+          <Money cents={total.planned} size="md" />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {lastChange ? `Last change ${new Date(lastChange).toLocaleString()}` : "No changes recorded yet"}
+        </p>
+      </CardContent>
     </Card>
   );
 }
