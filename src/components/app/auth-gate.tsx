@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/app/password-input";
 import { logger } from "@/lib/log";
 
 const log = logger("auth");
@@ -69,11 +70,15 @@ function SignIn() {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
+  const mismatch = mode === "up" && confirm.length > 0 && confirm !== password;
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (mode === "up" && confirm !== password) return void toast.error("Passwords don't match");
     setBusy(true);
     const { data, error } =
       mode === "in"
@@ -121,22 +126,43 @@ function SignIn() {
                 id="email"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
             <div className="space-y-1">
               <Label htmlFor="password">Password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 minLength={6}
+                autoComplete={mode === "in" ? "current-password" : "new-password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={busy}>
+            {mode === "up" && (
+              <div className="space-y-1">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <PasswordInput
+                  id="confirm-password"
+                  required
+                  minLength={6}
+                  autoComplete="new-password"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  aria-invalid={mismatch}
+                  aria-describedby={mismatch ? "confirm-error" : undefined}
+                />
+                {mismatch && (
+                  <p id="confirm-error" className="text-sm text-destructive">
+                    Passwords don't match.
+                  </p>
+                )}
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={busy || mismatch}>
               {mode === "in" ? "Sign in" : "Sign up"}
             </Button>
           </form>
@@ -146,6 +172,7 @@ function SignIn() {
           className="text-sm text-muted-foreground underline"
           onClick={() => {
             setMode(mode === "in" ? "up" : "in");
+            setConfirm("");
             setSent(false);
           }}
         >
