@@ -192,9 +192,10 @@ function DeleteLineDialog({ line, onClose, hasDone }: { line: BudgetLine | null;
           <DialogDescription>This deletes “{line?.description}”, its events and their evidence files.</DialogDescription>
         </DialogHeader>
         {hasDone && (
-          <div className="space-y-1">
-            <Label htmlFor="confirm-name">This line has completed events. Type the line name to confirm.</Label>
-            <Input id="confirm-name" value={typed} onChange={(e) => setTyped(e.target.value)} />
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">This line has completed events.</p>
+            <ConfirmLabel id="confirm-name" text={line?.description} />
+            <Input id="confirm-name" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={line?.description} autoComplete="off" />
           </div>
         )}
         <DialogFooter>
@@ -234,6 +235,14 @@ function ComponentDialog({ open, onOpenChange, nextCode, component }: { open: bo
   );
 }
 
+function ConfirmLabel({ id, text }: { id: string; text?: string }) {
+  return (
+    <Label htmlFor={id} className="block text-sm/6 font-normal text-muted-foreground">
+      Type <code className="rounded bg-muted box-decoration-clone px-1 py-0.5 font-mono text-xs text-foreground">{text}</code> to confirm.
+    </Label>
+  );
+}
+
 function DeleteComponentDialog({ component, onClose, lineCount, eventCount }: { component: Component | null; onClose: () => void; lineCount: number; eventCount: number }) {
   const rm = useRemoveComponent();
   const [typed, setTyped] = useState("");
@@ -249,9 +258,9 @@ function DeleteComponentDialog({ component, onClose, lineCount, eventCount }: { 
             This permanently deletes “{component?.code}. {component?.name}” with its {lineCount} line{lineCount === 1 ? "" : "s"}, {eventCount} event{eventCount === 1 ? "" : "s"} and all their evidence files.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-1">
-          <Label htmlFor="confirm-comp">Type the component name to confirm.</Label>
-          <Input id="confirm-comp" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={component?.name} />
+        <div className="space-y-2">
+          <ConfirmLabel id="confirm-comp" text={component?.name} />
+          <Input id="confirm-comp" value={typed} onChange={(e) => setTyped(e.target.value)} placeholder={component?.name} autoComplete="off" />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={close}>Cancel</Button>
