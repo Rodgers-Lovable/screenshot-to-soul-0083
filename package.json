@@ -12,8 +12,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:push": "set -a && . ./.env && set +a && supabase db push --db-url \"$SUPABASE_DB_URL\"",
-    "db:types": "set -a && . ./.env && set +a && supabase gen types typescript --db-url \"$SUPABASE_DB_URL\" --schema public > src/integrations/supabase/types.ts"
+    "db:push": "set -a && . ./.env.local && set +a && supabase db push --db-url \"$SUPABASE_DB_URL\"",
+    "db:types": "set -a && . ./.env.local && set +a && supabase gen types typescript --db-url \"$SUPABASE_DB_URL\" --schema public > src/integrations/supabase/types.ts"
   },
   "overrides": {
     "rolldown": "1.2.1"
