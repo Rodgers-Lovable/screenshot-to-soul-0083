@@ -14,7 +14,7 @@ You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is 
    npm install
    ```
 
-2. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key from Supabase (Project Settings, API).
+2. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key from Supabase (Project Settings, API). Each value goes in twice: once with the `VITE_` prefix for the browser (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`) and once without it for server rendering (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`).
 
 3. Apply the database schema. Add `SUPABASE_DB_URL` to `.env.local` (dashboard, Connect, Session pooler, with your database password), then:
 
@@ -32,16 +32,22 @@ You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is 
 
 The first person to sign in claims the team and becomes admin. Everyone else signs up, then a team member adds them under Settings, Team. An account that has not been added sees a waiting screen.
 
+On their first visit, each team member gets a short tour of the Dashboard, Budget, Events and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
+
 ## Scripts
 
-| Script             | What it does                                                       |
-| ------------------ | ------------------------------------------------------------------ |
-| `npm run dev`      | Dev server on port 8080                                            |
-| `npm run build`    | Production build (Nitro server in `.output/`)                      |
-| `npm test`         | Vitest                                                             |
-| `npm run lint`     | ESLint                                                             |
-| `npm run db:push`  | Apply new migrations to the database in `SUPABASE_DB_URL`          |
-| `npm run db:types` | Regenerate `src/integrations/supabase/types.ts` from that database |
+| Script               | What it does                                                       |
+| -------------------- | ------------------------------------------------------------------ |
+| `npm run dev`        | Dev server on port 8080                                            |
+| `npm run build`      | Production build (Nitro server in `.output/`)                      |
+| `npm run build:dev`  | Build in development mode                                          |
+| `npm run preview`    | Serve the production build locally                                 |
+| `npm test`           | Vitest, single run                                                 |
+| `npm run test:watch` | Vitest in watch mode                                               |
+| `npm run lint`       | ESLint                                                             |
+| `npm run format`     | Prettier, rewrites files in place                                  |
+| `npm run db:push`    | Apply new migrations to the database in `SUPABASE_DB_URL`          |
+| `npm run db:types`   | Regenerate `src/integrations/supabase/types.ts` from that database |
 
 ## Changing the schema
 
