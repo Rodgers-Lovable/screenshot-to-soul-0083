@@ -34,13 +34,13 @@ The first person to sign in claims the team and becomes admin. Everyone else sig
 
 ## Scripts
 
-| Script | What it does |
-| --- | --- |
-| `npm run dev` | Dev server on port 8080 |
-| `npm run build` | Production build (Nitro server in `.output/`) |
-| `npm test` | Vitest |
-| `npm run lint` | ESLint |
-| `npm run db:push` | Apply new migrations to the database in `SUPABASE_DB_URL` |
+| Script             | What it does                                                       |
+| ------------------ | ------------------------------------------------------------------ |
+| `npm run dev`      | Dev server on port 8080                                            |
+| `npm run build`    | Production build (Nitro server in `.output/`)                      |
+| `npm test`         | Vitest                                                             |
+| `npm run lint`     | ESLint                                                             |
+| `npm run db:push`  | Apply new migrations to the database in `SUPABASE_DB_URL`          |
 | `npm run db:types` | Regenerate `src/integrations/supabase/types.ts` from that database |
 
 ## Changing the schema

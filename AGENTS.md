@@ -1,4 +1,5 @@
 ## Project rules
+
 - Data access goes only through repositories in `src/data/repos.ts` via TanStack Query hooks in `src/data/hooks.ts`; repos load the shared budget from Supabase (`src/data/remote.ts`), apply changes in memory and write back only changed rows, so business logic stays in the repos.
 - All budget maths lives in pure `src/lib/calc.ts` (money as integer KES cents) with tests in `src/lib/calc.test.ts`.
 - The app shell renders client-only (`ClientOnly` in `__root.tsx`) because the sign-in session lives in the browser; `AuthGate` shows sign-in until a team member is signed in.

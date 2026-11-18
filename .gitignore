@@ -39,3 +39,6 @@ dist-ssr
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# Vercel CLI and local Vercel builds
+.vercel
