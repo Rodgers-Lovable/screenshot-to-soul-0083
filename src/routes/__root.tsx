@@ -83,9 +83,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Project Budget Tracker" },
-      { name: "description", content: "Track a project's approved budget against actual activity costs." },
+      {
+        name: "description",
+        content: "Track a project's approved budget against actual activity costs.",
+      },
       { property: "og:title", content: "Project Budget Tracker" },
-      { property: "og:description", content: "Track a project's approved budget against actual activity costs." },
+      {
+        property: "og:description",
+        content: "Track a project's approved budget against actual activity costs.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -96,7 +102,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+      },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "icon", href: "/favicon.ico", sizes: "any" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
@@ -130,7 +139,9 @@ function RootComponent() {
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <TooltipProvider delayDuration={200}>
         {/* The sign-in session lives in the browser, so the app renders on the client only. */}
-        <ClientOnly fallback={<div className="p-8 text-sm text-muted-foreground">Loading budget…</div>}>
+        <ClientOnly
+          fallback={<div className="p-8 text-sm text-muted-foreground">Loading budget…</div>}
+        >
           <AuthGate>
             <AppShell>
               <Outlet />

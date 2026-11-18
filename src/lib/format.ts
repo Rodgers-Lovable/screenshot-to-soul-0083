@@ -16,14 +16,15 @@ export function formatUSD(cents: number, fxRate: number): string {
   return `${neg ? "−" : ""}$${body}`;
 }
 
-export const formatSigned = (cents: number, fn: (c: number) => string) => (cents > 0 ? "+" : "") + fn(cents);
+export const formatSigned = (cents: number, fn: (c: number) => string) =>
+  (cents > 0 ? "+" : "") + fn(cents);
 export const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 /** Parse "Ksh120,000", " Ksh 30,000.00 ", "$923" → 923 (in currency units). */
 export function parseMoney(input: unknown): number | null {
   if (typeof input === "number") return Number.isFinite(input) ? input : null;
   if (typeof input !== "string") return null;
-  const cleaned = input.replace(/[\u00a0\s,]/g, "").replace(/[^0-9.\-]/g, "");
+  const cleaned = input.replace(/[\u00a0\s,]/g, "").replace(/[^0-9.-]/g, "");
   if (!cleaned || cleaned === "-" || cleaned === ".") return null;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
