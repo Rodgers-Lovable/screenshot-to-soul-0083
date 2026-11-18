@@ -115,9 +115,9 @@ function EventsPage() {
       {search.view === "calendar" ? (
         <Calendar month={calMonth} setMonth={setCalMonth} rows={rows} today={today} onOpen={open} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="sticky top-14 z-10 bg-muted text-xs text-muted-foreground">
+        <div className="max-h-[calc(100dvh-14rem)] overflow-auto rounded-lg border bg-card">
+          <table className="w-full min-w-225 text-sm">
+            <thead className="sticky top-0 z-10 bg-muted text-xs text-muted-foreground">
               <tr>{th("date", "Planned date")}{th("title", "Event")}<th className="px-3 py-2 text-left font-medium">Line</th>{th("status", "Status")}<th className="px-3 py-2 text-left font-medium">Flags</th>{th("actual", "Actual", true)}</tr>
             </thead>
             <tbody>
