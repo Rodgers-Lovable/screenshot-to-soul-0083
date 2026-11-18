@@ -2,7 +2,7 @@
 // UI must only reach these through hooks in src/data/hooks.ts.
 import type { Attachment, AuditEntry, BudgetEvent, BudgetLine, BudgetPeriod, Component } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
-import { eventTitle, makeSeed, type StoreData } from "./seed";
+import { eventTitle, type StoreData } from "./store";
 
 export interface PeriodRepo { get(): Promise<BudgetPeriod | null>; update(patch: Partial<BudgetPeriod>): Promise<BudgetPeriod> }
 export interface ComponentRepo {
@@ -26,7 +26,7 @@ export interface AttachmentRepo {
   remove(id: string): Promise<void>;
 }
 export interface AuditRepo { list(): Promise<AuditEntry[]> }
-export interface AdminRepo { reset(): Promise<void>; importLines(rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[]): Promise<number> }
+export interface AdminRepo { importLines(rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[]): Promise<number> }
 
 import { loadRemote, syncRemote, uploadEvidence, signUrls, currentUserLabel, listAudit, removeEvidence } from "./remote";
 
@@ -181,7 +181,6 @@ export const attachmentRepo: AttachmentRepo = {
 export const auditRepo: AuditRepo = { list: () => listAudit() };
 
 export const adminRepo: AdminRepo = {
-  reset: () => tx(() => { const s = makeSeed(); s.audit = [...db().audit]; state = s; audit("period", "p1", "(reset to demo)", null, "demo data"); }),
   importLines: (rows) => tx(() => {
     const d = db(); const created = new Map<string, string>();
     for (const r of rows) {

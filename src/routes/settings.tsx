@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Download, RotateCcw, Upload } from "lucide-react";
+import { AlertTriangle, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useAudit, useBudgetData, useImportLines, useResetDemo, useUpdatePeriod } from "@/data/hooks";
+import { useAudit, useBudgetData, useImportLines, useUpdatePeriod } from "@/data/hooks";
 import { exportWorkbook, parseBudgetRows, readWorkbook, type ParsedBlock, type ParsedRow } from "@/lib/excel";
 import { formatKES, kesToCents } from "@/lib/format";
 import { DURATION_UNITS, QUANTITY_UNITS, type BudgetPeriod, type DurationUnit, type QuantityUnit } from "@/lib/types";
@@ -53,11 +53,9 @@ function SettingsPage() {
 function PeriodForm() {
   const { period, events } = useBudgetData();
   const upd = useUpdatePeriod();
-  const reset = useResetDemo();
   const blank: BudgetPeriod = { id: "p1", projectName: "", name: "", startDate: "", endDate: "", fxRate: 125 };
   const [v, setV] = useState<BudgetPeriod>(period ?? blank);
   const [confirmFx, setConfirmFx] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
   useEffect(() => { if (period) setV(period); }, [period]);
   const anyDone = events.some((e) => e.status === "done");
   const invalid = !v.projectName.trim() || !v.name.trim() || !v.startDate || !v.endDate || v.endDate <= v.startDate || !(v.fxRate > 0);
@@ -90,10 +88,6 @@ function PeriodForm() {
           <Button onClick={save} disabled={invalid}>Save period</Button>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader><CardTitle className="text-base">Demo data</CardTitle><CardDescription>Restores the sample Program Alpha budget and clears your changes.</CardDescription></CardHeader>
-        <CardContent><Button variant="outline" onClick={() => setConfirmReset(true)}><RotateCcw className="h-4 w-4" />Reset demo data</Button></CardContent>
-      </Card>
 
       <AlertDialog open={confirmFx} onOpenChange={setConfirmFx}>
         <AlertDialogContent>
@@ -102,12 +96,6 @@ function PeriodForm() {
             <AlertDialogDescription>Events have already been recorded. Every USD figure in the app, including past actuals, will be recalculated at the new rate. KES amounts don't change.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={doSave}>Change rate</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={confirmReset} onOpenChange={setConfirmReset}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Reset all data?</AlertDialogTitle><AlertDialogDescription>All your edits, recorded actuals and uploaded files will be replaced by the demo data.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => reset.mutate(undefined, { onSuccess: () => toast.success("Demo data restored") })}>Reset</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

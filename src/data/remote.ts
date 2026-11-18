@@ -1,7 +1,7 @@
 // Supabase persistence for the repositories: load the shared budget, write back row diffs.
 import { supabase } from "@/integrations/supabase/client";
 import type { Attachment, AuditEntry } from "@/lib/types";
-import { makeSeed, type StoreData } from "./seed";
+import type { StoreData } from "./store";
 import { logger } from "@/lib/log";
 
 const log = logger("data");
@@ -94,15 +94,6 @@ async function fetchAll<T>(table: string, order = "id"): Promise<T[]> {
   }
 }
 
-const empty = (): StoreData => ({
-  period: null,
-  components: [],
-  lines: [],
-  events: [],
-  attachments: [],
-  audit: [],
-});
-
 let inflight: Promise<StoreData> | null = null;
 /** Concurrent callers share one load. */
 export function loadRemote(): Promise<StoreData> {
@@ -135,29 +126,10 @@ async function doLoad(): Promise<StoreData> {
     attachments,
     audit: [],
   };
-  if (!d.period && !components.length) return bootstrap();
+  if (!d.period && !components.length) log.info("budget is empty");
   return d;
 }
 
-
-/** First run: move this browser's earlier local budget into the cloud, or start from the demo budget. */
-async function bootstrap(): Promise<StoreData> {
-  log.info("cloud budget is empty, seeding it");
-  let start = makeSeed();
-  try {
-    const raw = window.localStorage.getItem("pbt-store-v1");
-    if (raw) {
-      const local = JSON.parse(raw) as StoreData;
-      local.attachments = local.attachments.filter((a) => !a.fileUrl.startsWith("blob:"));
-      start = local;
-      log.info("seeding from this browser's earlier local budget");
-    }
-  } catch {
-    /* keep demo */
-  }
-  await syncRemote(empty(), start);
-  return { ...start, audit: [] };
-}
 
 export async function syncRemote(before: StoreData, after: StoreData) {
   const changed = (k: Key | "period") => {

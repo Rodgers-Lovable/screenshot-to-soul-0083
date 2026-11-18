@@ -43,5 +43,4 @@ export const useRemoveLine = () => useM(lineRepo.remove);
 export const useUpdateEvent = () => useM((a: { id: string; patch: Parameters<typeof eventRepo.update>[1] }) => eventRepo.update(a.id, a.patch));
 export const useAddAttachment = () => useM((a: { eventId: string; file: File; label?: string }) => attachmentRepo.add(a.eventId, a.file, a.label));
 export const useRemoveAttachment = () => useM(attachmentRepo.remove);
-export const useResetDemo = () => useM(() => adminRepo.reset());
 export const useImportLines = () => useM(adminRepo.importLines);

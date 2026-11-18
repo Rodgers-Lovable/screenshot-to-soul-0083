@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeSeed } from "@/data/seed";
+import { makeSeed } from "@/test/demo-budget";
 import { burnRate, eventFigures, eventFlags, lineFlags, lineSummary, periodSummary, planOccurrenceChange, cumulativeByMonth } from "./calc";
 import { formatKES, formatUSD, parseMoney } from "./format";
 import type { BudgetEvent, BudgetLine } from "./types";
