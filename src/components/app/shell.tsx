@@ -2,6 +2,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   CalendarDays,
+  CircleHelp,
   ClipboardCheck,
   LayoutDashboard,
   ListTree,
@@ -30,6 +31,7 @@ import { useBudgetData } from "@/data/hooks";
 import { CurrencyProvider, useCurrency } from "./currency";
 import { RecordActualsForm } from "./record-actuals";
 import { StatusChip } from "./chips";
+import { TourProvider, useTour } from "./tour";
 
 const RecordCtx = createContext<{ open: (id: string) => void; pick: () => void }>({
   open: () => {},
@@ -38,16 +40,18 @@ const RecordCtx = createContext<{ open: (id: string) => void; pick: () => void }
 export const useRecord = () => useContext(RecordCtx);
 
 const NAV = [
-  { to: "/", label: "Dashboard", I: LayoutDashboard },
-  { to: "/budget", label: "Budget", I: ListTree },
-  { to: "/events", label: "Events", I: CalendarDays },
-  { to: "/settings", label: "Settings", I: Settings },
+  { to: "/", label: "Dashboard", tour: "dashboard", I: LayoutDashboard },
+  { to: "/budget", label: "Budget", tour: "budget", I: ListTree },
+  { to: "/events", label: "Events", tour: "events", I: CalendarDays },
+  { to: "/settings", label: "Settings", tour: "settings", I: Settings },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <CurrencyProvider>
-      <ShellInner>{children}</ShellInner>
+      <TourProvider>
+        <ShellInner>{children}</ShellInner>
+      </TourProvider>
     </CurrencyProvider>
   );
 }
@@ -55,6 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function ShellInner({ children }: { children: ReactNode }) {
   const { period, events, lines } = useBudgetData();
   const { cur, setCur } = useCurrency();
+  const tour = useTour();
   const [recordId, setRecordId] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
   const recordEv = events.find((e) => e.id === recordId);
@@ -65,6 +70,7 @@ function ShellInner({ children }: { children: ReactNode }) {
       to={n.to}
       search={n.to === "/events" ? {} : undefined}
       activeOptions={{ exact: n.to === "/" }}
+      data-tour={compact ? `nav-m-${n.tour}` : `nav-${n.tour}`}
       className={
         compact
           ? "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] text-muted-foreground data-[status=active]:text-primary"
@@ -103,13 +109,23 @@ function ShellInner({ children }: { children: ReactNode }) {
               value={cur}
               onValueChange={(v) => v && setCur(v as "KES" | "USD")}
               aria-label="Display currency"
+              data-tour="currency"
             >
               <ToggleGroupItem value="KES">KES</ToggleGroupItem>
               <ToggleGroupItem value="USD">USD</ToggleGroupItem>
             </ToggleGroup>
-            <Button size="sm" onClick={() => setPicker(true)}>
+            <Button size="sm" data-tour="record-actuals" onClick={() => setPicker(true)}>
               <ClipboardCheck className="h-4 w-4" />
               Record actuals
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Take the tour"
+              data-tour="tour-replay"
+              onClick={tour.start}
+            >
+              <CircleHelp className="h-4 w-4" />
             </Button>
             <Button
               size="icon"
