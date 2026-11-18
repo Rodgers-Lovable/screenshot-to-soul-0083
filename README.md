@@ -14,9 +14,9 @@ You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is 
    npm install
    ```
 
-2. Copy `.env.example` to `.env` and fill in the project URL and publishable key from Supabase (Project Settings, API).
+2. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key from Supabase (Project Settings, API).
 
-3. Apply the database schema. Add `SUPABASE_DB_URL` to `.env` (dashboard, Connect, Session pooler, with your database password), then:
+3. Apply the database schema. Add `SUPABASE_DB_URL` to `.env.local` (dashboard, Connect, Session pooler, with your database password), then:
 
    ```sh
    npm run db:push   # runs everything in supabase/migrations

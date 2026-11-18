@@ -26,6 +26,7 @@ import { scheduleDates, type Repeat } from "@/lib/calc";
 import { todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, BudgetPeriod } from "@/lib/types";
 import { StatusChip } from "@/components/app/chips";
+import { Truncated } from "@/components/app/truncated";
 
 const REPEATS: Record<string, { label: string; r: Repeat }> = {
   "1m": { label: "Every month", r: { every: 1, unit: "months" } },
@@ -100,7 +101,11 @@ export function ScheduleDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Schedule events</DialogTitle>
-          <DialogDescription className="line-clamp-2">{line?.description}</DialogDescription>
+          <DialogDescription asChild>
+            <div>
+              <Truncated text={line?.description ?? ""} lines={2} />
+            </div>
+          </DialogDescription>
         </DialogHeader>
 
         {sorted.length > 1 && (

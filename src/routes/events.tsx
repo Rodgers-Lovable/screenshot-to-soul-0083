@@ -52,6 +52,7 @@ import { Flags, StatusChip } from "@/components/app/chips";
 import { PageHeader, useRecord } from "@/components/app/shell";
 import { ScheduleDialog } from "@/components/app/schedule-dialog";
 import { cn } from "@/lib/utils";
+import { Truncated } from "@/components/app/truncated";
 
 export type EventFlagFilter =
   "upcoming" | "overdue" | "no-date" | "missing-evidence" | "over-budget";
@@ -412,11 +413,11 @@ function EventsPage() {
                           <span className="w-4 shrink-0" />
                         )}
                         <div className="min-w-0">
-                          <div className="truncate font-medium">{g.line.description}</div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {g.comp?.code}. {g.comp?.name}
-                            {g.line.groupLabel ? ` · ${g.line.groupLabel}` : ""}
-                          </div>
+                          <Truncated text={g.line.description} className="font-medium" />
+                          <Truncated
+                            text={`${g.comp?.code}. ${g.comp?.name}${g.line.groupLabel ? ` · ${g.line.groupLabel}` : ""}`}
+                            className="text-xs text-muted-foreground"
+                          />
                         </div>
                       </div>
                     </td>
@@ -538,8 +539,12 @@ function EventsPage() {
                   <td className="tabular-nums">
                     {(tab === "done" ? (e.actualDate ?? e.plannedDate) : e.plannedDate) ?? "—"}
                   </td>
-                  <td className="max-w-80 truncate">{e.title}</td>
-                  <td className="max-w-55 truncate text-muted-foreground">{line.description}</td>
+                  <td className="max-w-80">
+                    <Truncated text={e.title} />
+                  </td>
+                  <td className="max-w-55 text-muted-foreground">
+                    <Truncated text={line.description} />
+                  </td>
                   <td>
                     <StatusChip status={e.status} />
                   </td>
@@ -667,9 +672,9 @@ function FilterSelect({
   return (
     <Select value={value ?? all} onValueChange={(v) => onChange(v === all ? undefined : v)}>
       <SelectTrigger className="h-9 w-auto max-w-55" aria-label={label}>
-        <span className="truncate">
+        <Truncated text={opts.find((o) => o.v === value)?.l ?? `All ${label.toLowerCase()}s`}>
           <SelectValue />
-        </span>
+        </Truncated>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={all}>All {label.toLowerCase()}s</SelectItem>
@@ -759,15 +764,16 @@ function Calendar({
                   <button
                     key={e.id}
                     onClick={() => onOpen(e.id)}
-                    title={e.title}
                     className={cn(
-                      "block w-full truncate rounded border px-1 py-0.5 text-left text-[11px]",
+                      "block w-full rounded border px-1 py-0.5 text-left text-[11px]",
                       chip[e.status],
                       flags.includes("overdue") && "border-2 border-destructive",
                     )}
                   >
-                    {flags.includes("overdue") && <span className="sr-only">Overdue: </span>}
-                    {e.title}
+                    <Truncated text={e.title}>
+                      {flags.includes("overdue") && <span className="sr-only">Overdue: </span>}
+                      {e.title}
+                    </Truncated>
                   </button>
                 ))}
               </div>
