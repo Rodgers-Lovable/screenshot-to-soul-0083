@@ -17,7 +17,7 @@ import {
 
 type Member = { user_id: string; email: string };
 
-/** Lists team members; members add people, admins remove them. */
+/** Lists team members; members add people, admins remove them and choose other admins. */
 export function TeamPanel() {
   const [rows, setRows] = useState<Member[]>([]);
   const [admins, setAdmins] = useState<Set<string>>(new Set());
@@ -48,6 +48,15 @@ export function TeamPanel() {
     setEmail("");
     load();
   };
+  const setAdmin = async (m: Member, isAdmin: boolean) => {
+    const { error } = await supabase.rpc("set_team_admin", {
+      _user_id: m.user_id,
+      _is_admin: isAdmin,
+    });
+    if (error) toast.error(error.message);
+    else toast.success(isAdmin ? `${m.email} is now an admin` : `${m.email} is no longer an admin`);
+    load();
+  };
   const remove = async () => {
     if (!removing) return;
     const { error } = await supabase.rpc("remove_team_member", { _user_id: removing.user_id });
@@ -75,6 +84,15 @@ export function TeamPanel() {
               </span>
               {admins.has(r.user_id) && (
                 <span className="rounded bg-secondary px-2 py-0.5 text-xs">Admin</span>
+              )}
+              {isAdmin && (admins.size > 1 || !admins.has(r.user_id)) && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setAdmin(r, !admins.has(r.user_id))}
+                >
+                  {admins.has(r.user_id) ? "Remove admin" : "Make admin"}
+                </Button>
               )}
               {isAdmin && r.user_id !== me && (
                 <Button size="sm" variant="ghost" onClick={() => setRemoving(r)}>

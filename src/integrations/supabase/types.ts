@@ -297,6 +297,7 @@ export type Database = {
       is_team_member: { Args: Record<PropertyKey, never>; Returns: boolean };
       join_team_if_empty: { Args: Record<PropertyKey, never>; Returns: boolean };
       remove_team_member: { Args: { _user_id: string }; Returns: undefined };
+      set_team_admin: { Args: { _is_admin: boolean; _user_id: string }; Returns: undefined };
     };
     Enums: {
       app_role: "admin";
