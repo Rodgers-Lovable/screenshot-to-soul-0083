@@ -29,6 +29,7 @@ import { Money, useFmt } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
 import { LineEditor, formulaSentence } from "@/components/app/line-editor";
 import { useRecord } from "@/components/app/shell";
+import { Truncated } from "@/components/app/truncated";
 
 export const Route = createFileRoute("/budget_/lines/$id")({
   head: () => ({
@@ -163,7 +164,7 @@ function LineDetail() {
                   <tr key={e.id} className="h-10 border-t [&>td]:px-3 [&>td]:py-1">
                     <td className="num">{e.sequence}</td>
                     <td>
-                      <div className="max-w-65 truncate">{e.title}</div>
+                      <Truncated text={e.title} className="max-w-65" />
                       <Flags flags={eventFlags(e, n, today)} />
                     </td>
                     <td className="tabular-nums">{e.plannedDate ?? "—"}</td>

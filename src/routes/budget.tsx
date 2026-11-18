@@ -36,6 +36,7 @@ import { Money, useFmt } from "@/components/app/currency";
 import { Flags } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
 import { PageHeader } from "@/components/app/shell";
+import { Truncated } from "@/components/app/truncated";
 
 export const Route = createFileRoute("/budget")({
   head: () => ({
@@ -108,9 +109,7 @@ function BudgetPage() {
               <div className="sticky top-14 z-20 flex items-center gap-3 rounded-t-lg border-b bg-card px-4 py-2.5">
                 <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-2 text-left font-semibold">
                   <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
-                  <span className="truncate">
-                    {c.code}. {c.name}
-                  </span>
+                  <Truncated text={`${c.code}. ${c.name}`} />
                 </CollapsibleTrigger>
                 <span className="hidden text-xs text-muted-foreground sm:inline">Planned</span>
                 <Money cents={s.planned} size="md" />
@@ -291,7 +290,7 @@ function LineRow({
     >
       <td className="max-w-[320px]">
         <span className="flex items-center gap-1.5">
-          <span className="truncate">{l.description}</span>
+          <Truncated text={l.description} className="min-w-0" />
           {l.justification && (
             <Tooltip>
               <TooltipTrigger onClick={(e) => e.stopPropagation()} aria-label="Justification">
