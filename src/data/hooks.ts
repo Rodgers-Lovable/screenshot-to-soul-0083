@@ -71,6 +71,10 @@ export const useUpdateEvent = () =>
   useM((a: { id: string; patch: Parameters<typeof eventRepo.update>[1] }) =>
     eventRepo.update(a.id, a.patch),
   );
+export const useScheduleLine = () =>
+  useM((a: { lineId: string; dates: Parameters<typeof eventRepo.schedule>[1] }) =>
+    eventRepo.schedule(a.lineId, a.dates),
+  );
 export const useAddAttachment = () =>
   useM((a: { eventId: string; file: File; label?: string }) =>
     attachmentRepo.add(a.eventId, a.file, a.label),

@@ -32,6 +32,8 @@ export interface LineRepo {
 export interface EventRepo {
   list(): Promise<BudgetEvent[]>;
   update(id: string, patch: Partial<BudgetEvent>): Promise<BudgetEvent>;
+  /** Sets planned dates by sequence. Done and cancelled events are left alone. */
+  schedule(lineId: string, dates: { sequence: number; plannedDate?: string }[]): Promise<number>;
 }
 export interface AttachmentRepo {
   list(): Promise<Attachment[]>;
@@ -257,6 +259,19 @@ export const eventRepo: EventRepo = {
       if (!e) throw new Error("Event not found");
       applyPatch("event", e, patch);
       return clone(e);
+    }),
+  schedule: (lineId, dates) =>
+    tx(() => {
+      const bySeq = new Map(dates.map((x) => [x.sequence, x.plannedDate]));
+      let n = 0;
+      for (const e of db().events) {
+        if (e.lineId !== lineId || e.status !== "planned" || !bySeq.has(e.sequence)) continue;
+        const next = bySeq.get(e.sequence) || undefined;
+        if (next === e.plannedDate) continue;
+        applyPatch("event", e, { plannedDate: next });
+        n++;
+      }
+      return n;
     }),
 };
 

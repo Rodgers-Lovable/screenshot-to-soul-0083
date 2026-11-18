@@ -9,6 +9,10 @@ import {
   periodSummary,
   planOccurrenceChange,
   cumulativeByMonth,
+  addMonthsISO,
+  inEventTab,
+  lineProgress,
+  scheduleDates,
 } from "./calc";
 import { formatKES, formatUSD, parseMoney } from "./format";
 import type { BudgetEvent, BudgetLine } from "./types";
@@ -196,6 +200,70 @@ describe("occurrence changes", () => {
     expect(() =>
       planOccurrenceChange([ev({ status: "done" }), ev({ status: "cancelled" })], 1),
     ).toThrow();
+  });
+});
+
+describe("scheduling", () => {
+  it("clamps month ends without drifting", () => {
+    expect(addMonthsISO("2026-01-31", 1)).toBe("2026-02-28");
+    expect(scheduleDates("2026-01-31", 3, { every: 1, unit: "months" })).toEqual([
+      "2026-01-31",
+      "2026-02-28",
+      "2026-03-31",
+    ]);
+  });
+  it("crosses the year", () =>
+    expect(scheduleDates("2026-11-15", 3, { every: 2, unit: "months" })).toEqual([
+      "2026-11-15",
+      "2027-01-15",
+      "2027-03-15",
+    ]));
+  it("repeats weekly", () =>
+    expect(scheduleDates("2026-12-28", 2, { every: 2, unit: "weeks" })).toEqual([
+      "2026-12-28",
+      "2027-01-11",
+    ]));
+});
+
+describe("event tabs", () => {
+  const today = "2026-11-18";
+  it("needs action covers overdue, undated and missing evidence", () => {
+    expect(inEventTab(ev(), ["no-date"], "action", today)).toBe(true);
+    expect(inEventTab(ev({ plannedDate: "2026-12-01" }), [], "action", today)).toBe(false);
+  });
+  it("this month matches planned or actual date", () => {
+    expect(inEventTab(ev({ plannedDate: "2026-11-02" }), [], "month", today)).toBe(true);
+    expect(
+      inEventTab(
+        ev({ plannedDate: "2026-10-30", actualDate: "2026-11-01", status: "done" }),
+        [],
+        "month",
+        today,
+      ),
+    ).toBe(true);
+    expect(inEventTab(ev({ plannedDate: "2026-12-02" }), [], "month", today)).toBe(false);
+  });
+  it("upcoming is planned within 60 days", () => {
+    expect(inEventTab(ev({ plannedDate: "2027-01-10" }), [], "upcoming", today)).toBe(true);
+    expect(inEventTab(ev({ plannedDate: "2027-02-10" }), [], "upcoming", today)).toBe(false);
+    expect(inEventTab(ev({ plannedDate: "2026-11-01" }), [], "upcoming", today)).toBe(false);
+  });
+});
+
+describe("line progress", () => {
+  it("counts statuses and finds the next date", () => {
+    const p = lineProgress(
+      [
+        ev({ status: "done", plannedDate: "2026-10-15" }),
+        ev({ plannedDate: "2026-11-01" }),
+        ev({ plannedDate: "2026-12-15" }),
+        ev({ plannedDate: "2026-11-20" }),
+        ev(),
+        ev({ status: "cancelled" }),
+      ],
+      "2026-11-18",
+    );
+    expect(p).toEqual({ total: 6, done: 1, cancelled: 1, undated: 1, next: "2026-11-20" });
   });
 });
 

@@ -253,3 +253,79 @@ export function planOccurrenceChange(
   }
   return { add: 0, removeIds: removable.slice(0, need).map((e) => e.id) };
 }
+
+export const addDaysISO = (iso: string, n: number) =>
+  new Date(toTime(iso) + n * DAY).toISOString().slice(0, 10);
+
+/** Adds months, clamping to the month's last day (Jan 31 + 1 month = Feb 28). */
+export function addMonthsISO(iso: string, n: number): string {
+  const [y = 0, m = 1, d = 1] = iso.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(d, last));
+  return first.toISOString().slice(0, 10);
+}
+
+export interface Repeat {
+  every: number;
+  unit: "months" | "weeks";
+}
+
+/** Dates for occurrences 1..count. Each is counted from the first date so month ends don't drift. */
+export function scheduleDates(first: string, count: number, r: Repeat): string[] {
+  return Array.from({ length: count }, (_, i) =>
+    r.unit === "months" ? addMonthsISO(first, i * r.every) : addDaysISO(first, i * 7 * r.every),
+  );
+}
+
+export type EventTab = "action" | "month" | "upcoming" | "done" | "all";
+export const UPCOMING_DAYS = 60;
+
+/** Whether an event belongs on a tab of the Events page. */
+export function inEventTab(ev: BudgetEvent, flags: FlagKind[], tab: EventTab, today: string) {
+  switch (tab) {
+    case "action":
+      return flags.some((f) => f === "overdue" || f === "no-date" || f === "missing-evidence");
+    case "month": {
+      const m = today.slice(0, 7);
+      return (
+        (ev.actualDate ?? ev.plannedDate ?? "").startsWith(m) || !!ev.plannedDate?.startsWith(m)
+      );
+    }
+    case "upcoming":
+      return (
+        ev.status === "planned" &&
+        !!ev.plannedDate &&
+        ev.plannedDate >= today &&
+        ev.plannedDate <= addDaysISO(today, UPCOMING_DAYS)
+      );
+    case "done":
+      return ev.status === "done";
+    default:
+      return true;
+  }
+}
+
+export interface LineProgress {
+  total: number;
+  done: number;
+  cancelled: number;
+  undated: number;
+  /** Earliest planned date from today on. */
+  next?: string;
+}
+
+export function lineProgress(events: BudgetEvent[], today: string): LineProgress {
+  const planned = events.filter((e) => e.status === "planned");
+  const next = planned
+    .map((e) => e.plannedDate)
+    .filter((d): d is string => !!d && d >= today)
+    .sort()[0];
+  return {
+    total: events.length,
+    done: events.filter((e) => e.status === "done").length,
+    cancelled: events.filter((e) => e.status === "cancelled").length,
+    undated: planned.filter((e) => !e.plannedDate).length,
+    next,
+  };
+}
