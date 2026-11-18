@@ -338,7 +338,7 @@ function ImportPanel() {
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm">
+              <table className="w-full min-w-275 text-sm">
                 <thead className="text-xs text-muted-foreground">
                   <tr className="[&>th]:px-2 [&>th]:py-1.5 [&>th]:text-left [&>th]:font-medium">
                     <th>Description</th>
@@ -348,8 +348,8 @@ function ImportPanel() {
                     <th>Duration</th>
                     <th>Dur. unit</th>
                     <th>Occ.</th>
-                    <th className="!text-right">Calculated</th>
-                    <th className="!text-right">In file</th>
+                    <th className="text-right!">Calculated</th>
+                    <th className="text-right!">In file</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -568,7 +568,7 @@ function AuditLog() {
         />
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
-        <table className="w-full min-w-[800px] text-sm">
+        <table className="w-full min-w-200 text-sm">
           <thead className="bg-muted/60 text-xs text-muted-foreground">
             <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-left [&>th]:font-medium">
               <th>When</th>
@@ -587,13 +587,10 @@ function AuditLog() {
                 </td>
                 <td>{a.entity}</td>
                 <td className="font-mono text-xs">{a.field}</td>
-                <td
-                  className="max-w-[240px] truncate text-muted-foreground"
-                  title={a.oldValue ?? ""}
-                >
+                <td className="max-w-60 truncate text-muted-foreground" title={a.oldValue ?? ""}>
                   {a.oldValue ?? "—"}
                 </td>
-                <td className="max-w-[240px] truncate" title={a.newValue ?? ""}>
+                <td className="max-w-60 truncate" title={a.newValue ?? ""}>
                   {a.newValue ?? "—"}
                 </td>
                 <td>{a.changedBy}</td>

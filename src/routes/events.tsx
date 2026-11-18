@@ -264,9 +264,7 @@ function EventsPage() {
                 >
                   <td className="tabular-nums">{e.plannedDate ?? "—"}</td>
                   <td className="max-w-[320px] truncate">{e.title}</td>
-                  <td className="max-w-[220px] truncate text-muted-foreground">
-                    {line.description}
-                  </td>
+                  <td className="max-w-55 truncate text-muted-foreground">{line.description}</td>
                   <td>
                     <StatusChip status={e.status} />
                   </td>
@@ -312,7 +310,7 @@ function FilterSelect({
 }) {
   return (
     <Select value={value ?? all} onValueChange={(v) => onChange(v === all ? undefined : v)}>
-      <SelectTrigger className="h-9 w-auto max-w-[220px]" aria-label={label}>
+      <SelectTrigger className="h-9 w-auto max-w-55" aria-label={label}>
         <span className="truncate">
           <SelectValue />
         </span>

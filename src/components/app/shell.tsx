@@ -84,7 +84,7 @@ function ShellInner({ children }: { children: ReactNode }) {
       </CommandDialog>
 
       <Dialog open={!!recordId} onOpenChange={(o) => !o && setRecordId(null)}>
-        <DialogContent className="h-[100dvh] max-h-[100dvh] w-full max-w-full overflow-y-auto rounded-none p-4 sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-lg sm:p-6">
+        <DialogContent className="h-dvh max-h-dvh w-full max-w-full overflow-y-auto rounded-none p-4 sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-lg sm:p-6">
           <DialogHeader className="text-left">
             <DialogTitle className="pr-6">Record actuals</DialogTitle>
             <DialogDescription>{recordEv?.title}{recordEv && ` · ${lines.find((l) => l.id === recordEv.lineId)?.quantityUnit ?? ""}`}</DialogDescription>
