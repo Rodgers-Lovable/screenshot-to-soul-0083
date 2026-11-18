@@ -66,12 +66,14 @@ function SettingsPage() {
     <div>
       <PageHeader title="Settings" />
       <Tabs defaultValue="period">
-        <TabsList className="flex-wrap">
+        <TabsList className="flex-wrap" data-tour="settings-tabs">
           <TabsTrigger value="period">Period</TabsTrigger>
           <TabsTrigger value="import">Import</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
+          <TabsTrigger value="team" data-tour="settings-team">
+            Team
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="period">
           <PeriodForm />

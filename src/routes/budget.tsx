@@ -92,20 +92,29 @@ function BudgetPage() {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <Button variant="outline" onClick={() => setCompOpen(true)}>
+        <Button
+          variant="outline"
+          data-tour="budget-add-component"
+          onClick={() => setCompOpen(true)}
+        >
           <Plus className="h-4 w-4" />
           Add component
         </Button>
       </PageHeader>
 
       <div className="space-y-4">
-        {d.components.map((c) => {
+        {d.components.map((c, ci) => {
           const lines = filtered.filter((l) => l.componentId === c.id);
           const all = d.lines.filter((l) => l.componentId === c.id);
           const s = sumSummaries(all.map((l) => sums.get(l.id)!));
           const groups = [...new Set(lines.map((l) => l.groupLabel ?? ""))];
           return (
-            <Collapsible key={c.id} defaultOpen className="rounded-lg border bg-card">
+            <Collapsible
+              key={c.id}
+              defaultOpen
+              className="rounded-lg border bg-card"
+              data-tour={ci === 0 ? "budget-component" : undefined}
+            >
               <div className="sticky top-14 z-20 flex items-center gap-3 rounded-t-lg border-b bg-card px-4 py-2.5">
                 <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-2 text-left font-semibold">
                   <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-data-[state=closed]:-rotate-90" />
