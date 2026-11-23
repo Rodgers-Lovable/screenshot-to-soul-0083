@@ -3,6 +3,217 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      activities: {
+        Row: {
+          code: string;
+          copied_from_id: string | null;
+          frequency_label: string;
+          id: string;
+          kind: string;
+          means_of_verification: string;
+          notes: string;
+          outcome_id: string;
+          output: string;
+          repeat_every: number | null;
+          repeat_unit: string | null;
+          sort_order: number;
+          study_id: string;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          code?: string;
+          copied_from_id?: string | null;
+          frequency_label?: string;
+          id: string;
+          kind?: string;
+          means_of_verification?: string;
+          notes?: string;
+          outcome_id: string;
+          output?: string;
+          repeat_every?: number | null;
+          repeat_unit?: string | null;
+          sort_order?: number;
+          study_id: string;
+          title: string;
+        };
+        Update: {
+          code?: string;
+          copied_from_id?: string | null;
+          frequency_label?: string;
+          id?: string;
+          kind?: string;
+          means_of_verification?: string;
+          notes?: string;
+          outcome_id?: string;
+          output?: string;
+          repeat_every?: number | null;
+          repeat_unit?: string | null;
+          sort_order?: number;
+          study_id?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activities_copied_from_id_study_id_fkey";
+            columns: ["copied_from_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activities_outcome_id_study_id_fkey";
+            columns: ["outcome_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "outcomes";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activities_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      activity_indicators: {
+        Row: {
+          activity_id: string;
+          copied_from_id: string | null;
+          id: string;
+          name: string;
+          sort_order: number;
+          study_id: string;
+          target: number | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          copied_from_id?: string | null;
+          id: string;
+          name: string;
+          sort_order?: number;
+          study_id: string;
+          target?: number | null;
+        };
+        Update: {
+          activity_id?: string;
+          copied_from_id?: string | null;
+          id?: string;
+          name?: string;
+          sort_order?: number;
+          study_id?: string;
+          target?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activity_indicators_activity_id_study_id_fkey";
+            columns: ["activity_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activity_indicators_copied_from_id_study_id_fkey";
+            columns: ["copied_from_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activity_indicators";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activity_indicators_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      activity_responsibles: {
+        Row: {
+          activity_id: string;
+          id: string;
+          name: string;
+          sort_order: number;
+          study_id: string;
+          user_id: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          id: string;
+          name: string;
+          sort_order?: number;
+          study_id: string;
+          user_id?: string | null;
+        };
+        Update: {
+          activity_id?: string;
+          id?: string;
+          name?: string;
+          sort_order?: number;
+          study_id?: string;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activity_responsibles_activity_id_study_id_fkey";
+            columns: ["activity_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activity_responsibles_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      activity_sites: {
+        Row: {
+          activity_id: string;
+          site_id: string;
+          study_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          site_id: string;
+          study_id: string;
+        };
+        Update: {
+          activity_id?: string;
+          site_id?: string;
+          study_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activity_sites_activity_id_study_id_fkey";
+            columns: ["activity_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activity_sites_site_id_study_id_fkey";
+            columns: ["site_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "sites";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "activity_sites_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       attachments: {
         Row: {
           event_id: string;
@@ -236,6 +447,7 @@ export type Database = {
       };
       budget_periods: {
         Row: {
+          copied_from_id: string | null;
           currency: string;
           end_date: string;
           fx_rate: number;
@@ -248,6 +460,7 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
+          copied_from_id?: string | null;
           currency?: string;
           end_date?: string;
           fx_rate?: number;
@@ -259,6 +472,7 @@ export type Database = {
           study_id: string;
         };
         Update: {
+          copied_from_id?: string | null;
           currency?: string;
           end_date?: string;
           fx_rate?: number;
@@ -270,6 +484,13 @@ export type Database = {
           study_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "budget_periods_copied_from_fkey";
+            columns: ["copied_from_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "budget_periods";
+            referencedColumns: ["id", "study_id"];
+          },
           {
             foreignKeyName: "budget_periods_study_id_fkey";
             columns: ["study_id"];
@@ -346,6 +567,112 @@ export type Database = {
           },
         ];
       };
+      objectives: {
+        Row: {
+          code: string;
+          copied_from_id: string | null;
+          id: string;
+          period_id: string;
+          sort_order: number;
+          study_id: string;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          code?: string;
+          copied_from_id?: string | null;
+          id: string;
+          period_id: string;
+          sort_order?: number;
+          study_id: string;
+          title: string;
+        };
+        Update: {
+          code?: string;
+          copied_from_id?: string | null;
+          id?: string;
+          period_id?: string;
+          sort_order?: number;
+          study_id?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "objectives_copied_from_id_study_id_fkey";
+            columns: ["copied_from_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "objectives";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "objectives_period_id_study_id_fkey";
+            columns: ["period_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "budget_periods";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "objectives_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      outcomes: {
+        Row: {
+          code: string;
+          copied_from_id: string | null;
+          id: string;
+          objective_id: string;
+          sort_order: number;
+          study_id: string;
+          title: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          code?: string;
+          copied_from_id?: string | null;
+          id: string;
+          objective_id: string;
+          sort_order?: number;
+          study_id: string;
+          title: string;
+        };
+        Update: {
+          code?: string;
+          copied_from_id?: string | null;
+          id?: string;
+          objective_id?: string;
+          sort_order?: number;
+          study_id?: string;
+          title?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "outcomes_copied_from_id_study_id_fkey";
+            columns: ["copied_from_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "outcomes";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "outcomes_objective_id_study_id_fkey";
+            columns: ["objective_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "objectives";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "outcomes_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       platform_admins: {
         Row: {
           added_at: string;
@@ -361,6 +688,39 @@ export type Database = {
           user_id?: string;
         };
         Relationships: [];
+      };
+      sites: {
+        Row: {
+          archived_at: string | null;
+          id: string;
+          name: string;
+          sort_order: number;
+          study_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          archived_at?: string | null;
+          id: string;
+          name: string;
+          sort_order?: number;
+          study_id: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          id?: string;
+          name?: string;
+          sort_order?: number;
+          study_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "sites_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       studies: {
         Row: {
@@ -462,9 +822,46 @@ export type Database = {
     Functions: {
       add_study_member: { Args: { _email: string; _study_id: string }; Returns: boolean };
       add_team_member: { Args: { _email: string }; Returns: boolean };
+      audit_entry: {
+        Args: {
+          _entity: string;
+          _entity_id: string;
+          _field: string;
+          _new: string;
+          _old: string;
+          _study_id: string;
+        };
+        Returns: undefined;
+      };
       can_access_evidence: { Args: { _name: string }; Returns: boolean };
+      can_delete_evidence: { Args: { _name: string }; Returns: boolean };
       can_upload_evidence: { Args: { _name: string }; Returns: boolean };
+      check_year_fields: {
+        Args: {
+          _currency: string;
+          _end: string;
+          _except_id: string;
+          _fx: number;
+          _name: string;
+          _start: string;
+          _study_id: string;
+        };
+        Returns: undefined;
+      };
       create_study: { Args: { _name: string }; Returns: string };
+      create_workplan_year: {
+        Args: {
+          _copy_from_period_id?: string;
+          _currency: string;
+          _end_date: string;
+          _fx_rate: number;
+          _name: string;
+          _start_date: string;
+          _study_id: string;
+        };
+        Returns: string;
+      };
+      evidence_year_closed: { Args: { _name: string }; Returns: boolean };
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; _user_id: string };
         Returns: boolean;
@@ -474,6 +871,7 @@ export type Database = {
       is_study_member: { Args: { _study_id: string }; Returns: boolean };
       is_team_member: { Args: Record<PropertyKey, never>; Returns: boolean };
       join_team_if_empty: { Args: Record<PropertyKey, never>; Returns: boolean };
+      period_status_of: { Args: { _r: Json; _tbl: string }; Returns: string };
       remove_study_member: { Args: { _study_id: string; _user_id: string }; Returns: undefined };
       remove_team_member: { Args: { _user_id: string }; Returns: undefined };
       set_study_admin: {
@@ -481,6 +879,22 @@ export type Database = {
         Returns: undefined;
       };
       set_team_admin: { Args: { _is_admin: boolean; _user_id: string }; Returns: undefined };
+      set_workplan_year_status: {
+        Args: { _period_id: string; _status: string };
+        Returns: undefined;
+      };
+      update_workplan_year: {
+        Args: {
+          _currency: string;
+          _end_date: string;
+          _fx_rate: number;
+          _name: string;
+          _period_id: string;
+          _project_name: string;
+          _start_date: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       app_role: "admin";
