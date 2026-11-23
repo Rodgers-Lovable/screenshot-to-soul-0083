@@ -133,18 +133,18 @@ export const useUpdateActivity = () =>
 export const useRemoveActivity = () => useM(workplanRepo.removeActivity);
 export const useMoveActivity = () =>
   useM((a: { id: string; dir: "up" | "down" }) => workplanRepo.moveActivity(a.id, a.dir));
-export const useAddIndicator = () =>
-  useM((a: { activityId: string; input: Parameters<WP["addIndicator"]>[1] }) =>
-    workplanRepo.addIndicator(a.activityId, a.input),
+export const useAddIndicators = () =>
+  useM((a: { activityId: string; input: Parameters<WP["addIndicators"]>[1] }) =>
+    workplanRepo.addIndicators(a.activityId, a.input),
   );
 export const useUpdateIndicator = () =>
   useM((a: { id: string; patch: Parameters<WP["updateIndicator"]>[1] }) =>
     workplanRepo.updateIndicator(a.id, a.patch),
   );
 export const useRemoveIndicator = () => useM(workplanRepo.removeIndicator);
-export const useAddResponsible = () =>
-  useM((a: { activityId: string; input: Parameters<WP["addResponsible"]>[1] }) =>
-    workplanRepo.addResponsible(a.activityId, a.input),
+export const useAddResponsibles = () =>
+  useM((a: { activityId: string; input: Parameters<WP["addResponsibles"]>[1] }) =>
+    workplanRepo.addResponsibles(a.activityId, a.input),
   );
 export const useUpdateResponsible = () =>
   useM((a: { id: string; patch: Parameters<WP["updateResponsible"]>[1] }) =>

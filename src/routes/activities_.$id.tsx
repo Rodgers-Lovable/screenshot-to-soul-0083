@@ -15,8 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  useAddIndicator,
-  useAddResponsible,
+  useAddIndicators,
+  useAddResponsibles,
   useRemoveIndicator,
   useRemoveResponsible,
   useSetActivitySites,
@@ -30,7 +30,13 @@ import type { ActivityIndicator, ActivityResponsible } from "@/lib/types";
 import { CLOSED_HINT, useYear } from "@/components/app/active-year-context";
 import { useActiveStudy } from "@/components/app/active-study-context";
 import { ActivityFields, ConfirmDelete, KindChip, PlannedChip } from "@/components/app/workplan-ui";
-import { activityFormValid, toFormValue, type ActivityFormValue } from "@/lib/workplan";
+import {
+  activityFormValid,
+  multiAddMessage,
+  parseMultiEntry,
+  toFormValue,
+  type ActivityFormValue,
+} from "@/lib/workplan";
 
 export const Route = createFileRoute("/activities_/$id")({
   head: () => ({
@@ -182,7 +188,7 @@ function IndicatorsCard({
   rows: ActivityIndicator[];
   canEdit: boolean;
 }) {
-  const add = useAddIndicator();
+  const add = useAddIndicators();
   const upd = useUpdateIndicator();
   const rm = useRemoveIndicator();
   const [name, setName] = useState("");
@@ -191,18 +197,24 @@ function IndicatorsCard({
   const [en, setEn] = useState("");
   const [et, setEt] = useState("");
   const [del, setDel] = useState<ActivityIndicator | null>(null);
+  const parsed = parseMultiEntry(
+    name,
+    rows.map((r) => r.name),
+  );
+  const multi = parsed.add.length + parsed.skipped.length > 1;
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (!name.trim() || add.isPending) return;
     add.mutate(
       {
         activityId,
-        input: { name, target: target === "" ? undefined : Number(target) },
+        input: { text: name, target: multi || target === "" ? undefined : Number(target) },
       },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
           setName("");
           setTarget("");
-          toast.success("Indicator added");
+          toast.success(multiAddMessage("indicator", "indicators", res.added, res.skipped.length));
         },
       },
     );
@@ -211,7 +223,9 @@ function IndicatorsCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Indicators</CardTitle>
-        <CardDescription>What to measure. A target is optional.</CardDescription>
+        <CardDescription>
+          What to measure. Add several at once, separated by commas. A target is optional.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {!rows.length && <p className="text-sm text-muted-foreground">No indicators yet.</p>}
@@ -293,28 +307,40 @@ function IndicatorsCard({
           ))}
         </ul>
         {canEdit && (
-          <form onSubmit={submit} className="flex flex-wrap gap-2">
-            <Input
-              aria-label="New indicator"
-              placeholder="Indicator"
-              className="min-w-40 flex-1"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Input
-              aria-label="New indicator target"
-              type="number"
-              min={0}
-              step="any"
-              placeholder="Target"
-              className="w-28"
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-            />
-            <Button type="submit" disabled={!name.trim() || add.isPending}>
-              <Plus className="h-4 w-4" />
-              Add
-            </Button>
+          <form onSubmit={submit} className="space-y-1">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                aria-label="New indicators"
+                placeholder="Indicators, separated by commas"
+                className="min-w-40 flex-1"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  const p = parseMultiEntry(e.target.value);
+                  if (p.add.length + p.skipped.length > 1) setTarget("");
+                }}
+              />
+              <Input
+                aria-label="New indicator target"
+                type="number"
+                min={0}
+                step="any"
+                placeholder="Target"
+                className="w-28"
+                disabled={multi}
+                value={multi ? "" : target}
+                onChange={(e) => setTarget(e.target.value)}
+              />
+              <Button type="submit" disabled={!parsed.add.length || add.isPending}>
+                <Plus className="h-4 w-4" />
+                Add
+              </Button>
+            </div>
+            {multi && (
+              <p className="text-xs text-muted-foreground">
+                Targets are set for one indicator at a time. Edit each one after adding.
+              </p>
+            )}
           </form>
         )}
         <ConfirmDelete
@@ -345,12 +371,17 @@ function ResponsibleCard({
 }) {
   const { study } = useActiveStudy();
   const members = useStudyMembers(study.id).data ?? [];
-  const add = useAddResponsible();
+  const add = useAddResponsibles();
   const upd = useUpdateResponsible();
   const rm = useRemoveResponsible();
   const [name, setName] = useState("");
   const [userId, setUserId] = useState(NO_MEMBER);
   const emailOf = (uid?: string) => members.find((m) => m.userId === uid)?.email;
+  const parsed = parseMultiEntry(
+    name,
+    rows.map((r) => r.name),
+  );
+  const multi = parsed.add.length + parsed.skipped.length > 1;
   const pick = (v: string) => {
     setUserId(v);
     const email = emailOf(v);
@@ -358,13 +389,17 @@ function ResponsibleCard({
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (!name.trim() || add.isPending) return;
     add.mutate(
-      { activityId, input: { name, userId: userId === NO_MEMBER ? undefined : userId } },
       {
-        onSuccess: () => {
+        activityId,
+        input: { text: name, userId: multi || userId === NO_MEMBER ? undefined : userId },
+      },
+      {
+        onSuccess: (res) => {
           setName("");
           setUserId(NO_MEMBER);
-          toast.success("Person added");
+          toast.success(multiAddMessage("person", "people", res.added, res.skipped.length));
         },
       },
     );
@@ -373,7 +408,9 @@ function ResponsibleCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-base">Responsible people</CardTitle>
-        <CardDescription>Type a name, or link a person on the study team.</CardDescription>
+        <CardDescription>
+          Type a name, or several separated by commas. Link one person to a study team account.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {!rows.length && <p className="text-sm text-muted-foreground">Nobody assigned yet.</p>}
@@ -414,31 +451,42 @@ function ResponsibleCard({
           ))}
         </ul>
         {canEdit && (
-          <form onSubmit={submit} className="flex flex-wrap gap-2">
-            <Input
-              aria-label="Name"
-              placeholder="Name"
-              className="min-w-40 flex-1"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Select value={userId} onValueChange={pick}>
-              <SelectTrigger aria-label="Link to a team member" className="w-full sm:w-56">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NO_MEMBER}>Not linked to an account</SelectItem>
-                {members.map((m) => (
-                  <SelectItem key={m.userId} value={m.userId}>
-                    {m.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="submit" disabled={!name.trim() || add.isPending}>
-              <Plus className="h-4 w-4" />
-              Add
-            </Button>
+          <form onSubmit={submit} className="space-y-1">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                aria-label="Names"
+                placeholder="Names, separated by commas"
+                className="min-w-40 flex-1"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  const p = parseMultiEntry(e.target.value);
+                  if (p.add.length + p.skipped.length > 1) setUserId(NO_MEMBER);
+                }}
+              />
+              <Select value={multi ? NO_MEMBER : userId} onValueChange={pick} disabled={multi}>
+                <SelectTrigger aria-label="Link to a team member" className="w-full sm:w-56">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_MEMBER}>Not linked to an account</SelectItem>
+                  {members.map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>
+                      {m.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="submit" disabled={!parsed.add.length || add.isPending}>
+                <Plus className="h-4 w-4" />
+                Add
+              </Button>
+            </div>
+            {multi && (
+              <p className="text-xs text-muted-foreground">
+                Linking to an account works for one name at a time.
+              </p>
+            )}
           </form>
         )}
       </CardContent>

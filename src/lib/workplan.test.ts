@@ -7,6 +7,8 @@ import {
   findOverlap,
   frequencyText,
   moveWithin,
+  multiAddMessage,
+  parseMultiEntry,
   nextSortOrder,
   pickDefaultYear,
   suggestNextYear,
@@ -252,5 +254,43 @@ describe("suggestNextYear", () => {
   });
   it("labels a year", () => {
     expect(yearLabel("2026-01-01", "2026-12-31")).toBe("2026");
+  });
+});
+
+describe("parseMultiEntry", () => {
+  it("splits, trims and collapses spaces", () => {
+    expect(parseMultiEntry("Philip, Kadenge ,  Lorna  Ann").add).toEqual([
+      "Philip",
+      "Kadenge",
+      "Lorna Ann",
+    ]);
+  });
+  it("drops blanks", () => {
+    expect(parseMultiEntry(" , a,, ,b,").add).toEqual(["a", "b"]);
+    expect(parseMultiEntry(" , ").add).toEqual([]);
+  });
+  it("removes duplicates inside the entry, ignoring case", () => {
+    expect(parseMultiEntry("Ann, ann, ANN, Bob")).toEqual({
+      add: ["Ann", "Bob"],
+      skipped: ["ann", "ANN"],
+    });
+  });
+  it("skips names already on the activity", () => {
+    expect(parseMultiEntry("Ann, Bob", ["  ann "])).toEqual({ add: ["Bob"], skipped: ["Ann"] });
+  });
+  it("keeps a single value", () => {
+    expect(parseMultiEntry("Ann")).toEqual({ add: ["Ann"], skipped: [] });
+  });
+});
+
+describe("multiAddMessage", () => {
+  it("counts added and skipped", () => {
+    expect(multiAddMessage("person", "people", 3, 0)).toBe("3 people added");
+    expect(multiAddMessage("person", "people", 1, 2)).toBe("1 person added, 2 duplicates skipped");
+  });
+  it("says when all are duplicates", () => {
+    expect(multiAddMessage("person", "people", 0, 2)).toBe(
+      "Nothing added: all are already on this activity.",
+    );
   });
 });

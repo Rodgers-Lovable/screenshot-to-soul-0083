@@ -18,7 +18,7 @@ import type {
   WorkplanData,
 } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
-import { moveWithin, nextSortOrder, validateRepeat } from "@/lib/workplan";
+import { moveWithin, nextSortOrder, parseMultiEntry, validateRepeat } from "@/lib/workplan";
 import { eventTitle, type StoreData } from "./store";
 
 export interface PeriodRepo {
@@ -41,6 +41,10 @@ export type ActivityInput = Pick<Activity, "code" | "title" | "kind"> &
     >
   >;
 export type MoveDir = "up" | "down";
+export interface MultiAdd {
+  added: number;
+  skipped: string[];
+}
 export interface WorkplanRepo {
   get(): Promise<Omit<WorkplanData, "audit">>;
   addObjective(input: ObjectiveInput): Promise<Objective>;
@@ -56,10 +60,12 @@ export interface WorkplanRepo {
   updateActivity(id: string, patch: Partial<ActivityInput>): Promise<Activity>;
   removeActivity(id: string): Promise<void>;
   moveActivity(id: string, dir: MoveDir): Promise<void>;
-  addIndicator(activityId: string, input: { name: string; target?: number }): Promise<void>;
+  /** Comma-separated names, one transaction. Target applies only to a single name. */
+  addIndicators(activityId: string, input: { text: string; target?: number }): Promise<MultiAdd>;
   updateIndicator(id: string, patch: { name?: string; target?: number | null }): Promise<void>;
   removeIndicator(id: string): Promise<void>;
-  addResponsible(activityId: string, input: { name: string; userId?: string }): Promise<void>;
+  /** Comma-separated names, one transaction. A user link applies only to a single name. */
+  addResponsibles(activityId: string, input: { text: string; userId?: string }): Promise<MultiAdd>;
   updateResponsible(id: string, patch: { name?: string; userId?: string | null }): Promise<void>;
   removeResponsible(id: string): Promise<void>;
   setActivitySites(activityId: string, siteIds: string[]): Promise<void>;
@@ -666,22 +672,25 @@ export const workplanRepo: WorkplanRepo = {
       );
     }),
 
-  addIndicator: (activityId, input) =>
+  addIndicators: (activityId, input) =>
     wtx(() => {
       const w = wdb();
       activityOf(activityId);
-      if (!input.name.trim()) throw new Error("Give the indicator a name.");
-      if (input.target !== undefined && !(input.target >= 0))
-        throw new Error("The target cannot be negative.");
-      const i: ActivityIndicator = {
-        id: uid(),
-        activityId,
-        name: input.name.trim(),
-        target: input.target,
-        sortOrder: nextSortOrder(w.indicators.filter((x) => x.activityId === activityId)),
-      };
-      w.indicators.push(i);
-      auditCreate("indicator", i);
+      const mine = w.indicators.filter((x) => x.activityId === activityId);
+      const { add, skipped } = parseMultiEntry(
+        input.text,
+        mine.map((x) => x.name),
+      );
+      if (!add.length && !skipped.length) throw new Error("Give the indicator a name.");
+      const target = add.length === 1 ? input.target : undefined;
+      if (target !== undefined && !(target >= 0)) throw new Error("The target cannot be negative.");
+      let order = nextSortOrder(mine);
+      for (const name of add) {
+        const i: ActivityIndicator = { id: uid(), activityId, name, target, sortOrder: order++ };
+        w.indicators.push(i);
+        auditCreate("indicator", i);
+      }
+      return { added: add.length, skipped };
     }),
   updateIndicator: (id, patch) =>
     wtx(() => {
@@ -706,20 +715,24 @@ export const workplanRepo: WorkplanRepo = {
       audit("indicator", id, "(deleted)", i?.name, null);
     }),
 
-  addResponsible: (activityId, input) =>
+  addResponsibles: (activityId, input) =>
     wtx(() => {
       const w = wdb();
       activityOf(activityId);
-      if (!input.name.trim()) throw new Error("Give the person a name.");
-      const r: ActivityResponsible = {
-        id: uid(),
-        activityId,
-        name: input.name.trim(),
-        userId: input.userId,
-        sortOrder: nextSortOrder(w.responsibles.filter((x) => x.activityId === activityId)),
-      };
-      w.responsibles.push(r);
-      auditCreate("responsible", r);
+      const mine = w.responsibles.filter((x) => x.activityId === activityId);
+      const { add, skipped } = parseMultiEntry(
+        input.text,
+        mine.map((x) => x.name),
+      );
+      if (!add.length && !skipped.length) throw new Error("Give the person a name.");
+      const userId = add.length === 1 ? input.userId : undefined;
+      let order = nextSortOrder(mine);
+      for (const name of add) {
+        const r: ActivityResponsible = { id: uid(), activityId, name, userId, sortOrder: order++ };
+        w.responsibles.push(r);
+        auditCreate("responsible", r);
+      }
+      return { added: add.length, skipped };
     }),
   updateResponsible: (id, patch) =>
     wtx(() => {

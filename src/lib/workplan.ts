@@ -247,3 +247,35 @@ export const toFormValue = (a: Activity): ActivityFormValue => ({
 
 export const activityFormValid = (v: ActivityFormValue) =>
   !!v.title.trim() && !validateRepeat(v.repeatEvery, v.repeatUnit);
+
+export interface MultiEntry {
+  add: string[];
+  skipped: string[];
+}
+
+/** Splits a comma-separated entry. Skips blanks, repeats in the entry and names already present. */
+export function parseMultiEntry(text: string, existing: string[] = []): MultiEntry {
+  const key = (v: string) => v.toLowerCase();
+  const seen = new Set(existing.map((e) => key(e.replace(/\s+/g, " ").trim())));
+  const add: string[] = [];
+  const skipped: string[] = [];
+  for (const part of text.split(",")) {
+    const v = part.replace(/\s+/g, " ").trim();
+    if (!v) continue;
+    if (seen.has(key(v))) skipped.push(v);
+    else {
+      seen.add(key(v));
+      add.push(v);
+    }
+  }
+  return { add, skipped };
+}
+
+/** Toast text for a multi-add result. */
+export function multiAddMessage(noun: string, plural: string, added: number, skipped: number) {
+  const dup = `${skipped} duplicate${skipped === 1 ? "" : "s"} skipped`;
+  if (!added)
+    return `Nothing added: ${skipped === 1 ? "that is" : "all are"} already on this activity.`;
+  const base = `${added} ${added === 1 ? noun : plural} added`;
+  return skipped ? `${base}, ${dup}` : base;
+}
