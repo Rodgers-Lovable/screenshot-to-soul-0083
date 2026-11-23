@@ -11,7 +11,7 @@ type Call = {
 };
 const calls: Call[] = [];
 let tableRows: Record<string, Record<string, unknown>[]> = {};
-let rpcImpl: (fn: string) => unknown = () => ({ data: null, error: null });
+let rpcImpl: (fn: string, a?: unknown) => unknown = () => ({ data: null, error: null });
 
 vi.mock("@/integrations/supabase/client", () => {
   const from = (table: string) => ({
@@ -57,7 +57,7 @@ vi.mock("@/integrations/supabase/client", () => {
       return chain;
     },
   });
-  const rpc = (fn: string) => rpcImpl(fn);
+  const rpc = (fn: string, a?: unknown) => rpcImpl(fn, a);
   return {
     supabase: {
       from,
@@ -87,9 +87,23 @@ const year: BudgetPeriod = {
   currency: "KES",
   status: "open",
 };
+const line = (id: string): StoreData["lines"][number] => ({
+  id,
+  activityId: "a",
+  description: "d",
+  quantity: 1,
+  quantityUnit: "doses",
+  unitCostCents: 5,
+  duration: 1,
+  durationUnit: "one-off",
+  occurrences: 1,
+  sortOrder: 1,
+});
 const empty = (): StoreData => ({
   period: null,
-  components: [],
+  objectives: [],
+  outcomes: [],
+  activities: [],
   lines: [],
   events: [],
   attachments: [],
@@ -105,7 +119,7 @@ describe("syncRemote", () => {
   it("stamps the study on every upserted row, audit included", async () => {
     const after = empty();
     after.period = year;
-    after.components = [{ id: "c", periodId: "p", code: "1", name: "C", sortOrder: 1 }];
+    after.lines = [line("l")];
     after.audit = [
       {
         id: "a",
@@ -120,7 +134,7 @@ describe("syncRemote", () => {
     ];
     await syncRemote(empty(), after, "study-1");
     const writes = calls.filter((c) => c.op === "upsert" || c.op === "insert");
-    expect(writes.map((c) => c.table)).toEqual(["components", "audit_log"]);
+    expect(writes.map((c) => c.table)).toEqual(["budget_lines", "audit_log"]);
     for (const c of writes) for (const r of c.rows ?? []) expect(r.study_id).toBe("study-1");
   });
 
@@ -144,11 +158,11 @@ describe("syncRemote", () => {
 
   it("skips unchanged rows and scopes deletes to the study", async () => {
     const before = empty();
-    before.components = [{ id: "c", periodId: "p", code: "1", name: "C", sortOrder: 1 }];
+    before.lines = [line("l")];
     const after = empty();
     await syncRemote(before, after, "study-2");
     expect(calls.some((c) => c.op === "upsert")).toBe(false);
-    const del = calls.find((c) => c.table === "components" && c.op === "delete");
+    const del = calls.find((c) => c.table === "budget_lines" && c.op === "delete");
     expect(del?.eq).toEqual([["study_id", "study-2"]]);
   });
 });
@@ -179,50 +193,71 @@ describe("loadRemote", () => {
   it("keeps study_id out of loaded rows so it cannot leak into audit entries", async () => {
     tableRows = {
       budget_periods: [{ id: "p", study_id: "study-1", status: "open", currency: "KES" }],
-      components: [{ id: "c", period_id: "p", study_id: "study-1" }],
+      objectives: [{ id: "o", period_id: "p", study_id: "study-1", title: "O" }],
+      outcomes: [{ id: "oc", objective_id: "o", study_id: "study-1", title: "OC" }],
+      activities: [{ id: "a", outcome_id: "oc", study_id: "study-1", title: "A" }],
       budget_lines: [
-        { id: "l", component_id: "c", description: "d", study_id: "study-1", unit_cost_cents: 5 },
+        {
+          id: "l",
+          activity_id: "a",
+          description: "d",
+          study_id: "study-1",
+          unit_cost_cents: 5,
+          copied_from_id: "old",
+        },
       ],
     };
     const d = await loadRemote("study-1", "p");
     expect(d.lines[0]).not.toHaveProperty("studyId");
     expect(d.lines[0]).not.toHaveProperty("study_id");
     expect(d.lines[0]?.unitCostCents).toBe(5);
+    expect(d.lines[0]?.activityId).toBe("a");
+    expect(d.lines[0]?.copiedFromId).toBe("old");
+    expect(d.activities[0]?.id).toBe("a");
     expect(d.period?.status).toBe("open");
   });
 
   it("returns an empty budget and reads nothing when the study has no year", async () => {
     const d = await loadRemote("study-1", null);
     expect(d.period).toBeNull();
-    expect(d.components).toEqual([]);
+    expect(d.activities).toEqual([]);
     expect(calls).toEqual([]);
   });
 
   it("reads only the chosen year and reaches children through their parents", async () => {
     tableRows = {
       budget_periods: [{ id: "p2", study_id: "study-1" }],
-      components: [{ id: "c2", period_id: "p2" }],
-      budget_lines: [{ id: "l2", component_id: "c2" }],
+      objectives: [{ id: "o2", period_id: "p2" }],
+      outcomes: [{ id: "oc2", objective_id: "o2" }],
+      activities: [{ id: "a2", outcome_id: "oc2" }],
+      budget_lines: [{ id: "l2", activity_id: "a2" }],
       budget_events: [{ id: "e2", line_id: "l2" }],
     };
     await loadRemote("study-1", "p2");
     const sel = (t: string) => calls.find((c) => c.table === t && c.op === "select");
     expect(sel("budget_periods")?.eq).toContainEqual(["id", "p2"]);
-    expect(sel("components")?.eq).toContainEqual(["period_id", "p2"]);
-    expect(sel("budget_lines")?.in).toEqual(["component_id", ["c2"]]);
+    expect(sel("objectives")?.eq).toContainEqual(["period_id", "p2"]);
+    expect(sel("outcomes")?.in).toEqual(["objective_id", ["o2"]]);
+    expect(sel("activities")?.in).toEqual(["outcome_id", ["oc2"]]);
+    expect(sel("budget_lines")?.in).toEqual(["activity_id", ["a2"]]);
+    const order = calls.filter((c) => c.op === "select").map((c) => c.table);
+    expect(order.indexOf("objectives")).toBeLessThan(order.indexOf("outcomes"));
+    expect(order.indexOf("outcomes")).toBeLessThan(order.indexOf("activities"));
+    expect(order.indexOf("activities")).toBeLessThan(order.indexOf("budget_lines"));
+    expect(calls.some((c) => c.table === "components")).toBe(false);
     expect(sel("budget_events")?.in).toEqual(["line_id", ["l2"]]);
     expect(sel("attachments")?.in).toEqual(["event_id", ["e2"]]);
   });
 
   it("returns an empty budget when the year is not in the study", async () => {
-    tableRows = { components: [{ id: "c", period_id: "x" }] };
+    tableRows = { objectives: [{ id: "o", period_id: "x" }] };
     const d = await loadRemote("study-1", "x");
     expect(d.period).toBeNull();
-    expect(d.components).toEqual([]);
+    expect(d.activities).toEqual([]);
     expect(calls.some((c) => c.table === "budget_lines")).toBe(false);
   });
 
-  it("does not read child tables when a year has no components", async () => {
+  it("does not read lines when a year has no activities", async () => {
     tableRows = { budget_periods: [{ id: "p3" }] };
     await loadRemote("study-1", "p3");
     expect(calls.some((c) => c.table === "budget_lines")).toBe(false);
@@ -328,6 +363,24 @@ describe("createYear", () => {
     );
     expect(id).toBe("new-id");
     expect(args).toBe("create_workplan_year");
+  });
+  it("copies budget lines only when asked and a source year is given", async () => {
+    const seen: Record<string, unknown>[] = [];
+    rpcImpl = (_fn, a) => {
+      seen.push(a as Record<string, unknown>);
+      return Promise.resolve({ data: "id", error: null });
+    };
+    const v = {
+      name: "Y",
+      startDate: "2027-01-01",
+      endDate: "2027-12-31",
+      fxRate: 1,
+      currency: "KES",
+    };
+    await createYear("s", v, "old");
+    await createYear("s", v, "old", true);
+    await createYear("s", v, null, true);
+    expect(seen.map((a) => a._copy_budget_lines)).toEqual([false, true, false]);
   });
   it("turns a database error into an Error with its message", async () => {
     rpcImpl = () => Promise.resolve({ data: null, error: { message: "These dates overlap" } });

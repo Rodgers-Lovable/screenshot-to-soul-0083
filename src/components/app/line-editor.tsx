@@ -25,17 +25,25 @@ import {
 import { useBudgetData, useCreateLine, useUpdateLine } from "@/data/hooks";
 import { linePlanned, planOccurrenceChange } from "@/lib/calc";
 import { durationLabel, formatKES, formatUSD, kesToCents } from "@/lib/format";
-import { COST_CATEGORIES, DURATION_UNITS, QUANTITY_UNITS, type BudgetLine } from "@/lib/types";
+import { activityOptions, isOneOff, unitSuggestions } from "@/lib/budget-tree";
+import {
+  COST_CATEGORIES,
+  DURATION_UNITS,
+  ONE_OFF,
+  QUANTITY_UNITS,
+  type BudgetLine,
+} from "@/lib/types";
+import { ActivityPicker, UnitInput } from "./budget-fields";
 
 const schema = z.object({
-  componentId: z.string().min(1, "Choose a component"),
+  activityId: z.string().min(1, "Choose an activity"),
   groupLabel: z.string().optional(),
   description: z.string().trim().min(1, "Description required").max(200),
   quantity: z.coerce.number().positive("Must be > 0"),
-  quantityUnit: z.enum(["pax", "SMS", "units", "lines", "vehicles", "sets"]),
+  quantityUnit: z.string().trim().min(1, "Unit required").max(40),
   unitCost: z.coerce.number().min(0, "Must be ≥ 0"),
   duration: z.coerce.number().positive("Must be > 0"),
-  durationUnit: z.enum(["days", "months", "one-off"]),
+  durationUnit: z.string().trim().min(1, "Duration unit required").max(40),
   occurrences: z.coerce.number().int("Whole number").min(1, "At least 1").max(366),
   justification: z.string().max(1000).optional(),
   costCategory: z
@@ -52,9 +60,8 @@ export function formulaSentence(
   >,
   fx: number,
 ) {
-  const total = linePlanned({ ...l, id: "", componentId: "", description: "", sortOrder: 0 });
-  const dur =
-    l.durationUnit === "one-off" ? "1 one-off" : durationLabel(l.duration, l.durationUnit);
+  const total = linePlanned({ ...l, id: "", activityId: "", description: "", sortOrder: 0 });
+  const dur = isOneOff(l.durationUnit) ? "1 one-off" : durationLabel(l.duration, l.durationUnit);
   return `${l.quantity} ${l.quantityUnit} × ${formatKES(l.unitCostCents)} × ${dur} × ${l.occurrences} = ${formatKES(total)} (${formatUSD(total, fx)})`;
 }
 
@@ -62,21 +69,41 @@ export function LineEditor({
   open,
   onOpenChange,
   line,
-  componentId,
+  activityId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   line?: BudgetLine;
-  componentId?: string;
+  activityId?: string;
 }) {
-  const { components, events, period } = useBudgetData();
+  const { objectives, outcomes, activities, lines, events, period } = useBudgetData();
+  const options = useMemo(
+    () => activityOptions({ objectives, outcomes, activities }),
+    [objectives, outcomes, activities],
+  );
+  const qtyUnits = useMemo(
+    () =>
+      unitSuggestions(
+        QUANTITY_UNITS,
+        lines.map((l) => l.quantityUnit),
+      ),
+    [lines],
+  );
+  const durUnits = useMemo(
+    () =>
+      unitSuggestions(
+        DURATION_UNITS,
+        lines.map((l) => l.durationUnit),
+      ),
+    [lines],
+  );
   const fx = period?.fxRate ?? 125;
   const create = useCreateLine();
   const update = useUpdateLine();
   const defaults = (): In =>
     line
       ? {
-          componentId: line.componentId,
+          activityId: line.activityId,
           groupLabel: line.groupLabel ?? "",
           description: line.description,
           quantity: line.quantity,
@@ -89,11 +116,11 @@ export function LineEditor({
           costCategory: line.costCategory ?? "none",
         }
       : {
-          componentId: componentId ?? components[0]?.id ?? "",
+          activityId: activityId ?? "",
           groupLabel: "",
           description: "",
           quantity: 1,
-          quantityUnit: "pax",
+          quantityUnit: "units",
           unitCost: 0,
           duration: 1,
           durationUnit: "days",
@@ -107,15 +134,15 @@ export function LineEditor({
   });
   useEffect(() => {
     if (open) form.reset(defaults());
-  }, [open, line?.id, componentId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, line?.id, activityId]); // eslint-disable-line react-hooks/exhaustive-deps
   const w = useWatch({ control: form.control });
 
   const preview = useMemo(() => {
     const p = {
       quantity: Number(w.quantity) || 0,
-      quantityUnit: w.quantityUnit ?? "pax",
+      quantityUnit: w.quantityUnit ?? "",
       unitCostCents: kesToCents(Number(w.unitCost) || 0),
-      duration: w.durationUnit === "one-off" ? 1 : Number(w.duration) || 0,
+      duration: isOneOff(w.durationUnit ?? "") ? 1 : Number(w.duration) || 0,
       durationUnit: w.durationUnit ?? "days",
       occurrences: Number(w.occurrences) || 0,
     };
@@ -136,7 +163,7 @@ export function LineEditor({
     }
     return {
       sentence: formulaSentence(p, fx),
-      total: linePlanned({ ...p, id: "", componentId: "", description: "", sortOrder: 0 }),
+      total: linePlanned({ ...p, id: "", activityId: "", description: "", sortOrder: 0 }),
       delta,
       blocked,
     };
@@ -145,13 +172,13 @@ export function LineEditor({
   async function onSubmit(v: Out) {
     if (preview.blocked) return;
     const payload = {
-      componentId: v.componentId,
+      activityId: v.activityId,
       groupLabel: v.groupLabel?.trim() || undefined,
       description: v.description,
       quantity: v.quantity,
       quantityUnit: v.quantityUnit,
       unitCostCents: kesToCents(v.unitCost),
-      duration: v.durationUnit === "one-off" ? 1 : v.duration,
+      duration: isOneOff(v.durationUnit) ? 1 : v.duration,
       durationUnit: v.durationUnit,
       occurrences: v.occurrences,
       justification: v.justification?.trim() || undefined,
@@ -171,11 +198,7 @@ export function LineEditor({
     form.formState.errors[k] && (
       <p className="text-xs text-destructive">{String(form.formState.errors[k]?.message)}</p>
     );
-  const sel = (
-    name: "componentId" | "quantityUnit" | "durationUnit" | "costCategory",
-    opts: { v: string; l: string }[],
-    label: string,
-  ) => (
+  const sel = (name: "costCategory", opts: { v: string; l: string }[], label: string) => (
     <div className="space-y-1">
       <Label>{label}</Label>
       <Select
@@ -207,11 +230,20 @@ export function LineEditor({
           </SheetDescription>
         </SheetHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="mt-4 space-y-3">
-          {sel(
-            "componentId",
-            components.map((c) => ({ v: c.id, l: `${c.code}. ${c.name}` })),
-            "Component",
-          )}
+          <div className="space-y-1">
+            <Label>Activity</Label>
+            <ActivityPicker
+              value={w.activityId ?? ""}
+              onChange={(id) => form.setValue("activityId", id, { shouldValidate: true })}
+              options={options}
+            />
+            {!options.length && (
+              <p className="text-xs text-muted-foreground">
+                This year has no activities yet. Add one under Activities first.
+              </p>
+            )}
+            {err("activityId")}
+          </div>
           <div className="space-y-1">
             <Label htmlFor="groupLabel">Group (optional)</Label>
             <Input id="groupLabel" {...form.register("groupLabel")} />
@@ -227,11 +259,17 @@ export function LineEditor({
               <Input id="quantity" type="number" step="any" {...form.register("quantity")} />
               {err("quantity")}
             </div>
-            {sel(
-              "quantityUnit",
-              QUANTITY_UNITS.map((u) => ({ v: u, l: u })),
-              "Unit",
-            )}
+            <div className="space-y-1">
+              <Label htmlFor="quantityUnit">Unit</Label>
+              <UnitInput
+                id="quantityUnit"
+                value={w.quantityUnit ?? ""}
+                onChange={(v) => form.setValue("quantityUnit", v, { shouldValidate: true })}
+                suggestions={qtyUnits}
+                placeholder="pax, sets, doses"
+              />
+              {err("quantityUnit")}
+            </div>
             <div className="space-y-1">
               <Label htmlFor="unitCost">Unit cost (KES)</Label>
               <Input id="unitCost" type="number" step="any" {...form.register("unitCost")} />
@@ -248,16 +286,22 @@ export function LineEditor({
                 id="duration"
                 type="number"
                 step="any"
-                disabled={w.durationUnit === "one-off"}
+                disabled={isOneOff(w.durationUnit ?? "")}
                 {...form.register("duration")}
               />
               {err("duration")}
             </div>
-            {sel(
-              "durationUnit",
-              DURATION_UNITS.map((u) => ({ v: u, l: u })),
-              "Duration unit",
-            )}
+            <div className="space-y-1">
+              <Label htmlFor="durationUnit">Duration unit</Label>
+              <UnitInput
+                id="durationUnit"
+                value={w.durationUnit ?? ""}
+                onChange={(v) => form.setValue("durationUnit", v, { shouldValidate: true })}
+                suggestions={durUnits}
+                placeholder={ONE_OFF}
+              />
+              {err("durationUnit")}
+            </div>
           </div>
           {sel(
             "costCategory",
@@ -285,7 +329,7 @@ export function LineEditor({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!!preview.blocked}>
+            <Button type="submit" disabled={!!preview.blocked || !options.length}>
               {line ? "Save changes" : "Add line"}
             </Button>
           </SheetFooter>

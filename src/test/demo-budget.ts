@@ -4,13 +4,15 @@ import type {
   BudgetEvent,
   BudgetLine,
   BudgetPeriod,
-  Component,
+  Activity,
+  Objective,
+  Outcome,
   DurationUnit,
   QuantityUnit,
 } from "@/lib/types";
 import { eventTitle, type StoreData } from "@/data/store";
 
-type Row = [string, number, QuantityUnit, number, number, DurationUnit, number, string?];
+export type Row = [string, number, QuantityUnit, number, number, DurationUnit, number, string?];
 
 const C1_PLATFORM: Row[] = [
   [
@@ -133,12 +135,31 @@ export function makeSeed(): StoreData {
     currency: "KES",
     status: "open",
   };
-  const components: Component[] = [
-    { id: "c1", periodId: "p1", code: "1", name: "Community Alert Reporting", sortOrder: 1 },
-    { id: "c2", periodId: "p1", code: "2", name: "Rapid Field Surveys", sortOrder: 2 },
+  const objectives: Objective[] = [
+    { id: "o1", periodId: "p1", code: "1", title: "Community Alert Reporting", sortOrder: 1 },
+    { id: "o2", periodId: "p1", code: "2", title: "Rapid Field Surveys", sortOrder: 2 },
   ];
+  const outcomes: Outcome[] = [
+    { id: "oc1", objectiveId: "o1", code: "1", title: "Community Alert Reporting", sortOrder: 1 },
+    { id: "oc2", objectiveId: "o2", code: "2", title: "Rapid Field Surveys", sortOrder: 1 },
+  ];
+  const activities: Activity[] = [
+    ["c1", "oc1", "1", "Community Alert Reporting"],
+    ["c2", "oc2", "2", "Rapid Field Surveys"],
+  ].map(([id, outcomeId, code, title]) => ({
+    id: id!,
+    outcomeId: outcomeId!,
+    code: code!,
+    title: title!,
+    kind: "general" as const,
+    output: "",
+    meansOfVerification: "",
+    frequencyLabel: "",
+    notes: "",
+    sortOrder: 1,
+  }));
   const lines: BudgetLine[] = [];
-  const push = (rows: Row[], componentId: string, groupLabel?: string) =>
+  const push = (rows: Row[], activityId: string, groupLabel?: string) =>
     rows.forEach(
       ([
         description,
@@ -153,7 +174,7 @@ export function makeSeed(): StoreData {
         const n = lines.length + 1;
         lines.push({
           id: `l${n}`,
-          componentId,
+          activityId,
           groupLabel,
           description,
           quantity,
@@ -263,5 +284,5 @@ export function makeSeed(): StoreData {
   ev("l25", 1).plannedDate = "2026-12-02";
   // l12, l22, l23 left without dates → "No date" flag.
 
-  return { period, components, lines, events, attachments, audit: [] };
+  return { period, objectives, outcomes, activities, lines, events, attachments, audit: [] };
 }

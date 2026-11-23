@@ -54,12 +54,13 @@ import { useYear } from "@/components/app/active-year-context";
 import { ScheduleDialog } from "@/components/app/schedule-dialog";
 import { cn } from "@/lib/utils";
 import { Truncated } from "@/components/app/truncated";
+import { activityOptions } from "@/lib/budget-tree";
 
 export type EventFlagFilter =
   "upcoming" | "overdue" | "no-date" | "missing-evidence" | "over-budget";
 export interface SpendingSearch {
   tab?: EventTab;
-  component?: string;
+  activity?: string;
   line?: string;
   month?: string;
   flag?: EventFlagFilter;
@@ -85,7 +86,7 @@ const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 export const Route = createFileRoute("/spending")({
   validateSearch: (s: Record<string, unknown>): SpendingSearch => ({
     tab: TABS.some((t) => t.v === s.tab) ? (s.tab as EventTab) : undefined,
-    component: str(s.component),
+    activity: str(s.activity),
     line: str(s.line),
     month: str(s.month),
     q: str(s.q),
@@ -133,7 +134,7 @@ function SpendingPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scheduling, setScheduling] = useState<BudgetLine | null>(null);
 
-  const hasFilter = !!(search.component || search.line || search.month || search.flag || search.q);
+  const hasFilter = !!(search.activity || search.line || search.month || search.flag || search.q);
   // Dashboard links pass only a flag, so filtered visits open on "All".
   const tab: EventTab = search.tab ?? (hasFilter ? "all" : "action");
   const view = search.view ?? "grouped";
@@ -154,7 +155,7 @@ function SpendingPage() {
       if (!line) return [];
       const n = evidence.get(e.id) ?? 0;
       const flags = eventFlags(e, n, today);
-      if (search.component && line.componentId !== search.component) return [];
+      if (search.activity && line.activityId !== search.activity) return [];
       if (search.line && line.id !== search.line) return [];
       if (
         search.month &&
@@ -205,22 +206,28 @@ function SpendingPage() {
   }, [filtered, tab, sort, today]);
 
   const groups = useMemo(() => {
-    const compOrder = new Map(d.components.map((c) => [c.id, c]));
+    const actOrder = new Map(
+      activityOptions({
+        objectives: d.objectives,
+        outcomes: d.outcomes,
+        activities: d.activities,
+      }).map((o, i) => [o.id, { label: o.label, index: i }]),
+    );
     const byLine = new Map<string, Row[]>();
     for (const r of rows) byLine.set(r.line.id, [...(byLine.get(r.line.id) ?? []), r]);
     return d.lines
       .filter((l) => byLine.has(l.id))
       .sort(
         (a, b) =>
-          (compOrder.get(a.componentId)?.sortOrder ?? 0) -
-            (compOrder.get(b.componentId)?.sortOrder ?? 0) || a.sortOrder - b.sortOrder,
+          (actOrder.get(a.activityId)?.index ?? 0) - (actOrder.get(b.activityId)?.index ?? 0) ||
+          a.sortOrder - b.sortOrder,
       )
       .map((line) => {
         const lineEvents = d.events.filter((e) => e.lineId === line.id);
         const matched = byLine.get(line.id)!.sort((a, b) => a.e.sequence - b.e.sequence);
         return {
           line,
-          comp: compOrder.get(line.componentId),
+          activityName: actOrder.get(line.activityId)?.label ?? "",
           rows: matched,
           lineEvents,
           progress: lineProgress(lineEvents, today),
@@ -314,10 +321,14 @@ function SpendingPage() {
 
       <div className="mb-4 flex flex-wrap items-center gap-2" data-tour="spending-filters">
         <FilterSelect
-          label="Component"
-          value={search.component}
-          onChange={(v) => set({ component: v, line: undefined })}
-          opts={d.components.map((c) => ({ v: c.id, l: `${c.code}. ${c.name}` }))}
+          label="Activity"
+          value={search.activity}
+          onChange={(v) => set({ activity: v, line: undefined })}
+          opts={activityOptions({
+            objectives: d.objectives,
+            outcomes: d.outcomes,
+            activities: d.activities,
+          }).map((o) => ({ v: o.id, l: o.label }))}
           all={ALL}
         />
         <FilterSelect
@@ -325,7 +336,7 @@ function SpendingPage() {
           value={search.line}
           onChange={(v) => set({ line: v })}
           opts={d.lines
-            .filter((l) => !search.component || l.componentId === search.component)
+            .filter((l) => !search.activity || l.activityId === search.activity)
             .map((l) => ({ v: l.id, l: l.description }))}
           all={ALL}
         />
@@ -418,7 +429,7 @@ function SpendingPage() {
                         <div className="min-w-0">
                           <Truncated text={g.line.description} className="font-medium" />
                           <Truncated
-                            text={`${g.comp?.code}. ${g.comp?.name}${g.line.groupLabel ? ` · ${g.line.groupLabel}` : ""}`}
+                            text={`${g.activityName}${g.line.groupLabel ? ` · ${g.line.groupLabel}` : ""}`}
                             className="text-xs text-muted-foreground"
                           />
                         </div>

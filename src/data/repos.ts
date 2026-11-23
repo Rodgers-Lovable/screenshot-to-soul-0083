@@ -9,7 +9,6 @@ import type {
   BudgetEvent,
   BudgetLine,
   BudgetPeriod,
-  Component,
   Objective,
   Outcome,
   Site,
@@ -18,6 +17,13 @@ import type {
   WorkplanData,
 } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
+import {
+  cleanUnit,
+  fundedDeleteMessage,
+  linesUnder,
+  validateLineActivity,
+  validateLineMove,
+} from "@/lib/budget-tree";
 import { moveWithin, nextSortOrder, parseMultiEntry, validateRepeat } from "@/lib/workplan";
 import { eventTitle, type StoreData } from "./store";
 
@@ -28,7 +34,12 @@ export interface PeriodRepo {
 }
 export interface YearRepo {
   list(studyId: string): Promise<BudgetPeriod[]>;
-  create(studyId: string, v: YearInput, copyFromId: string | null): Promise<string>;
+  create(
+    studyId: string,
+    v: YearInput,
+    copyFromId: string | null,
+    copyBudgetLines?: boolean,
+  ): Promise<string>;
   setStatus(id: string, status: "open" | "closed"): Promise<void>;
 }
 export type ObjectiveInput = Pick<Objective, "code" | "title">;
@@ -75,13 +86,7 @@ export interface SiteRepo {
   rename(id: string, name: string): Promise<void>;
   setArchived(id: string, archived: boolean): Promise<void>;
 }
-export interface ComponentRepo {
-  list(): Promise<Component[]>;
-  create(input: Omit<Component, "id" | "periodId" | "sortOrder">): Promise<Component>;
-  update(id: string, patch: Partial<Component>): Promise<Component>;
-  remove(id: string): Promise<void>;
-}
-export type LineInput = Omit<BudgetLine, "id" | "sortOrder">;
+export type LineInput = Omit<BudgetLine, "id" | "sortOrder" | "copiedFromId">;
 export interface LineRepo {
   list(): Promise<BudgetLine[]>;
   create(input: LineInput): Promise<BudgetLine>;
@@ -114,9 +119,8 @@ export interface StudyRepo {
   setAdmin(studyId: string, userId: string, isAdmin: boolean): Promise<void>;
 }
 export interface AdminRepo {
-  importLines(
-    rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[],
-  ): Promise<number>;
+  /** Adds every row as a line of one activity in the active year. */
+  importLines(activityId: string, rows: Omit<LineInput, "activityId">[]): Promise<number>;
 }
 
 import {
@@ -266,12 +270,6 @@ const read = async <T>(f: (d: StoreData) => T): Promise<T> => {
   const { study, period } = scopeNow();
   return clone(f(await loadRemote(study, period)));
 };
-/** The loaded year. Only admins can create a year, so a missing one is an error here. */
-function ensurePeriod(d: StoreData): BudgetPeriod {
-  if (!d.period) throw new Error(NO_YEAR);
-  return d.period;
-}
-
 export const periodRepo: PeriodRepo = {
   get: () => read((d) => d.period),
   update: async (patch) => {
@@ -304,38 +302,6 @@ function removeLineLocal(id: string) {
   audit("line", id, "(deleted)", line?.description, null);
 }
 
-export const componentRepo: ComponentRepo = {
-  list: () => read((d) => [...d.components].sort((a, b) => a.sortOrder - b.sortOrder)),
-  create: (input) =>
-    tx(() => {
-      const d = db();
-      const c: Component = {
-        id: uid(),
-        periodId: ensurePeriod(d).id,
-        sortOrder: d.components.length + 1,
-        ...input,
-      };
-      d.components.push(c);
-      auditCreate("component", c);
-      return clone(c);
-    }),
-  update: (id, patch) =>
-    tx(() => {
-      const c = db().components.find((x) => x.id === id);
-      if (!c) throw new Error("Component not found");
-      applyPatch("component", c, patch);
-      return clone(c);
-    }),
-  remove: (id) =>
-    tx(() => {
-      const d = db();
-      d.lines.filter((l) => l.componentId === id).forEach((l) => removeLineLocal(l.id));
-      const c = d.components.find((x) => x.id === id);
-      d.components = d.components.filter((x) => x.id !== id);
-      audit("component", id, "(deleted)", c?.name, null);
-    }),
-};
-
 function createEvents(line: BudgetLine, from: number, to: number) {
   const d = db();
   for (let s = from; s <= to; s++) {
@@ -356,9 +322,25 @@ function retitle(line: BudgetLine) {
     if (e.title !== t) e.title = t;
   }
 }
+function cleanLine<T extends { quantityUnit?: string; durationUnit?: string }>(v: T): T {
+  const out = { ...v };
+  if (out.quantityUnit !== undefined) {
+    const u = cleanUnit(out.quantityUnit);
+    if (!u) throw new Error("Give the line a unit, such as pax or sets.");
+    out.quantityUnit = u;
+  }
+  if (out.durationUnit !== undefined) {
+    const u = cleanUnit(out.durationUnit);
+    if (!u) throw new Error("Give the line a duration unit, such as days, months or one-off.");
+    out.durationUnit = u;
+  }
+  return out;
+}
 function createLine(input: LineInput): BudgetLine {
   const d = db();
-  const line: BudgetLine = { ...input, id: uid(), sortOrder: d.lines.length + 1 };
+  const bad = validateLineActivity(input.activityId, d.period?.id, d);
+  if (bad) throw new Error(bad);
+  const line: BudgetLine = { ...cleanLine(input), id: uid(), sortOrder: d.lines.length + 1 };
   d.lines.push(line);
   auditCreate("line", line);
   createEvents(line, 1, line.occurrences);
@@ -373,6 +355,11 @@ export const lineRepo: LineRepo = {
       const d = db();
       const line = d.lines.find((l) => l.id === id);
       if (!line) throw new Error("Line not found");
+      patch = cleanLine(patch);
+      if (patch.activityId !== undefined && patch.activityId !== line.activityId) {
+        const bad = validateLineMove(line, patch.activityId, d);
+        if (bad) throw new Error(bad);
+      }
       if (patch.occurrences !== undefined && patch.occurrences !== line.occurrences) {
         const evs = d.events.filter((e) => e.lineId === id);
         const plan = planOccurrenceChange(evs, patch.occurrences); // throws if blocked
@@ -390,7 +377,7 @@ export const lineRepo: LineRepo = {
     tx(() => {
       const src = db().lines.find((l) => l.id === id);
       if (!src) throw new Error("Line not found");
-      const { id: _i, sortOrder: _s, financePostedCents: _f, ...rest } = src;
+      const { id: _i, sortOrder: _s, financePostedCents: _f, copiedFromId: _c, ...rest } = src;
       return clone(createLine({ ...rest, description: `${src.description} (copy)` }));
     }),
   remove: (id) => tx(() => removeLineLocal(id)),
@@ -498,6 +485,11 @@ function removeOutcomeLocal(id: string) {
   w.outcomes = w.outcomes.filter((x) => x.id !== id);
   audit("outcome", id, "(deleted)", o?.title, null);
 }
+/** Lines of the active year, read before a delete so funded items can be refused. */
+async function lineSnapshot(scope: Scope): Promise<BudgetLine[]> {
+  if (!scope.period) return [];
+  return (await loadRemote(scope.study, scope.period)).lines;
+}
 const found = <T>(row: T | undefined, what: string): T => {
   if (!row) throw new Error(`${what} not found`);
   return row;
@@ -547,14 +539,31 @@ export const workplanRepo: WorkplanRepo = {
       applyPatch("objective", o, next);
       return clone(o);
     }),
-  removeObjective: (id) =>
-    wtx(() => {
-      const w = wdb();
-      w.outcomes.filter((o) => o.objectiveId === id).forEach((o) => removeOutcomeLocal(o.id));
-      const o = w.objectives.find((x) => x.id === id);
-      w.objectives = w.objectives.filter((x) => x.id !== id);
-      audit("objective", id, "(deleted)", o?.title, null);
-    }),
+  removeObjective: async (id) => {
+    const scope = scopeNow();
+    const lines = await lineSnapshot(scope);
+    return wtx(
+      () => {
+        const w = wdb();
+        const outs = w.outcomes.filter((o) => o.objectiveId === id);
+        const acts = w.activities.filter((a) => outs.some((o) => o.id === a.outcomeId));
+        const bad = fundedDeleteMessage(
+          "objective",
+          linesUnder(
+            acts.map((a) => a.id),
+            lines,
+          ),
+        );
+        if (bad) throw new Error(bad);
+        outs.forEach((o) => removeOutcomeLocal(o.id));
+        const o = w.objectives.find((x) => x.id === id);
+        w.objectives = w.objectives.filter((x) => x.id !== id);
+        audit("objective", id, "(deleted)", o?.title, null);
+      },
+      {},
+      scope,
+    );
+  },
   moveObjective: (id, dir) => wtx(() => reorder("objective", wdb().objectives, id, dir)),
 
   addOutcome: (objectiveId, input) =>
@@ -587,7 +596,26 @@ export const workplanRepo: WorkplanRepo = {
       applyPatch("outcome", o, next);
       return clone(o);
     }),
-  removeOutcome: (id) => wtx(() => removeOutcomeLocal(id)),
+  removeOutcome: async (id) => {
+    const scope = scopeNow();
+    const lines = await lineSnapshot(scope);
+    return wtx(
+      () => {
+        const acts = wdb().activities.filter((a) => a.outcomeId === id);
+        const bad = fundedDeleteMessage(
+          "outcome",
+          linesUnder(
+            acts.map((a) => a.id),
+            lines,
+          ),
+        );
+        if (bad) throw new Error(bad);
+        removeOutcomeLocal(id);
+      },
+      {},
+      scope,
+    );
+  },
   moveOutcome: (id, dir) =>
     wtx(() => {
       const w = wdb();
@@ -659,7 +687,19 @@ export const workplanRepo: WorkplanRepo = {
       applyPatch<Activity>("activity", a, next as Partial<Activity>);
       return clone(a);
     }),
-  removeActivity: (id) => wtx(() => removeActivityLocal(id)),
+  removeActivity: async (id) => {
+    const scope = scopeNow();
+    const lines = await lineSnapshot(scope);
+    return wtx(
+      () => {
+        const bad = fundedDeleteMessage("activity", linesUnder([id], lines));
+        if (bad) throw new Error(bad);
+        removeActivityLocal(id);
+      },
+      {},
+      scope,
+    );
+  },
   moveActivity: (id, dir) =>
     wtx(() => {
       const w = wdb();
@@ -852,30 +892,9 @@ export const studyRepo: StudyRepo = {
 };
 
 export const adminRepo: AdminRepo = {
-  importLines: (rows) =>
+  importLines: (activityId, rows) =>
     tx(() => {
-      const d = db();
-      const created = new Map<string, string>();
-      for (const r of rows) {
-        let cid = r.component.id;
-        if (!cid) {
-          cid = created.get(r.component.name);
-          if (!cid) {
-            const c: Component = {
-              id: uid(),
-              periodId: ensurePeriod(d).id,
-              code: String(d.components.length + 1),
-              name: r.component.name,
-              sortOrder: d.components.length + 1,
-            };
-            d.components.push(c);
-            auditCreate("component", c);
-            created.set(c.name, c.id);
-            cid = c.id;
-          }
-        }
-        createLine({ ...r.line, componentId: cid });
-      }
+      for (const r of rows) createLine({ ...r, activityId });
       return rows.length;
     }),
 };

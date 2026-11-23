@@ -1,3 +1,4 @@
+import { isOneOff } from "@/lib/budget-tree";
 import { useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -98,9 +99,9 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
         `${Math.abs(dq)} ${dq > 0 ? "fewer" : "more"} ${unitWord(line.quantityUnit, Math.abs(dq))} than planned`,
       );
     const dd = line.duration - d;
-    if (dd && line.durationUnit !== "one-off")
+    if (dd && !isOneOff(line.durationUnit))
       parts.push(
-        `${Math.abs(dd)} ${dd > 0 ? "fewer" : "more"} ${line.durationUnit === "days" ? "day(s)" : "month(s)"}`,
+        `${Math.abs(dd)} ${dd > 0 ? "fewer" : "more"} ${line.durationUnit === "days" ? "day(s)" : line.durationUnit === "months" ? "month(s)" : line.durationUnit}`,
       );
     const dr = line.unitCostCents - kesToCents(Number(w.unitCost) || 0);
     if (dr) parts.push(`unit cost ${f.primary(Math.abs(dr))} ${dr > 0 ? "lower" : "higher"}`);

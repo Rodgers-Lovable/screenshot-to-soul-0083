@@ -15,7 +15,6 @@ import { logger } from "@/lib/log";
 
 const log = logger("data");
 
-type Key = "components" | "lines" | "events" | "attachments";
 type WKey = "sites" | "objectives" | "outcomes" | "activities" | "indicators" | "responsibles";
 const COLS = {
   sites: ["id", "name", "sortOrder", "archivedAt"],
@@ -38,10 +37,9 @@ const COLS = {
   ],
   indicators: ["id", "activityId", "name", "target", "sortOrder", "copiedFromId"],
   responsibles: ["id", "activityId", "name", "userId", "sortOrder"],
-  components: ["id", "periodId", "code", "name", "sortOrder"],
   lines: [
     "id",
-    "componentId",
+    "activityId",
     "groupLabel",
     "description",
     "quantity",
@@ -54,6 +52,7 @@ const COLS = {
     "costCategory",
     "financePostedCents",
     "sortOrder",
+    "copiedFromId",
   ],
   events: [
     "id",
@@ -90,7 +89,6 @@ const TABLE = {
   indicators: "activity_indicators",
   responsibles: "activity_responsibles",
   activitySites: "activity_sites",
-  components: "components",
   lines: "budget_lines",
   events: "budget_events",
   attachments: "attachments",
@@ -171,7 +169,7 @@ export function loadRemote(study: string, period: string | null): Promise<StoreD
         () => doLoad(study, period),
         (d) => ({
           period: d.period?.name ?? null,
-          components: d.components.length,
+          activities: d.activities.length,
           lines: d.lines.length,
           events: d.events.length,
           attachments: d.attachments.length,
@@ -187,25 +185,33 @@ export function loadRemote(study: string, period: string | null): Promise<StoreD
 async function doLoad(study: string, periodId: string | null): Promise<StoreData> {
   const none: StoreData = {
     period: null,
-    components: [],
+    objectives: [],
+    outcomes: [],
+    activities: [],
     lines: [],
     events: [],
     attachments: [],
     audit: [],
   };
   if (!periodId) return none;
-  const [periods, components] = await Promise.all([
-    fetchAll<BudgetPeriod>(TABLE.period, study, { eq: ["id", periodId] }),
-    fetchAll<StoreData["components"][number]>(TABLE.components, study, {
-      eq: ["period_id", periodId],
-    }),
-  ]);
+  const periods = await fetchAll<BudgetPeriod>(TABLE.period, study, { eq: ["id", periodId] });
   const period = periods[0] ?? null;
   if (!period) return none;
   // Children are read through their parents, so another year's rows are never loaded.
+  const objectives = await fetchAll<StoreData["objectives"][number]>(TABLE.objectives, study, {
+    eq: ["period_id", periodId],
+  });
+  const outcomes = await fetchAll<StoreData["outcomes"][number]>(TABLE.outcomes, study, {
+    col: "objective_id",
+    ids: ids(objectives),
+  });
+  const activities = await fetchAll<StoreData["activities"][number]>(TABLE.activities, study, {
+    col: "outcome_id",
+    ids: ids(outcomes),
+  });
   const lines = await fetchAll<StoreData["lines"][number]>(TABLE.lines, study, {
-    col: "component_id",
-    ids: ids(components),
+    col: "activity_id",
+    ids: ids(activities),
   });
   const events = await fetchAll<StoreData["events"][number]>(TABLE.events, study, {
     col: "line_id",
@@ -215,8 +221,8 @@ async function doLoad(study: string, periodId: string | null): Promise<StoreData
     col: "event_id",
     ids: ids(events),
   });
-  if (!components.length) log.info("year has no budget yet");
-  return { period, components, lines, events, attachments, audit: [] };
+  if (!activities.length) log.info("year has no activities yet");
+  return { period, objectives, outcomes, activities, lines, events, attachments, audit: [] };
 }
 
 type RunResult = PromiseLike<{ error: { message: string } | null }>;
@@ -271,7 +277,7 @@ const insertAudit = async (list: AuditEntry[], studyId: string) => {
 /** Writes the rows that changed. Years are never written here; they go through functions. */
 export async function syncRemote(before: StoreData, after: StoreData, studyId: string) {
   const written: Record<string, number> = {};
-  for (const k of ["components", "lines", "events", "attachments"] as const) {
+  for (const k of ["lines", "events", "attachments"] as const) {
     const rows = diff(before, after, k, COLS[k], studyId);
     if (rows.length) written[`${k} upserted`] = rows.length;
     await upsertRows(TABLE[k], rows);
@@ -279,7 +285,7 @@ export async function syncRemote(before: StoreData, after: StoreData, studyId: s
   const gone = before.attachments.filter(
     (a) => !after.attachments.some((x) => x.id === a.id),
   ) as Attachment[];
-  for (const k of ["attachments", "events", "lines", "components"] as const) {
+  for (const k of ["attachments", "events", "lines"] as const) {
     const list = removedIds(before, after, k);
     if (list.length) written[`${k} deleted`] = list.length;
     await deleteIds(TABLE[k], studyId, list);
@@ -547,6 +553,7 @@ export async function createYear(
   study: string,
   v: YearInput,
   copyFromId: string | null,
+  copyBudgetLines = false,
 ): Promise<string> {
   const { data, error } = await rpc("create_workplan_year", {
     _study_id: study,
@@ -556,6 +563,7 @@ export async function createYear(
     _fx_rate: v.fxRate,
     _currency: v.currency,
     _copy_from_period_id: copyFromId,
+    _copy_budget_lines: copyBudgetLines && copyFromId !== null,
   });
   if (error) throw new Error(error.message);
   return data as string;
