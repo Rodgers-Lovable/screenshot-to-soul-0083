@@ -4,11 +4,16 @@ import type { StoreData } from "./store";
 type Call = { table: string; op: string; rows?: Record<string, unknown>[]; eq?: unknown[] };
 const calls: Call[] = [];
 let loadRows: Record<string, unknown>[] = [];
+let rpcImpl: (fn: string) => unknown = () => ({ data: null, error: null });
 
 vi.mock("@/integrations/supabase/client", () => {
   const from = (table: string) => ({
     upsert: (rows: Record<string, unknown>[]) => {
       calls.push({ table, op: "upsert", rows });
+      return Promise.resolve({ error: null });
+    },
+    insert: (rows: Record<string, unknown>[]) => {
+      calls.push({ table, op: "insert", rows });
       return Promise.resolve({ error: null });
     },
     delete: () => {
@@ -32,10 +37,18 @@ vi.mock("@/integrations/supabase/client", () => {
       return chain;
     },
   });
-  return { supabase: { from, storage: { from: () => ({ remove: async () => ({}) }) } } };
+  const rpc = (fn: string) => rpcImpl(fn);
+  return {
+    supabase: {
+      from,
+      rpc,
+      auth: { getSession: async () => ({ data: { session: null } }) },
+      storage: { from: () => ({ remove: async () => ({}) }) },
+    },
+  };
 });
 
-import { loadRemote, syncRemote } from "./remote";
+import { isPlatformAdmin, loadRemote, syncRemote } from "./remote";
 
 const empty = (): StoreData => ({
   period: null,
@@ -76,9 +89,27 @@ describe("syncRemote", () => {
       },
     ];
     await syncRemote(empty(), after, "study-1");
-    const upserts = calls.filter((c) => c.op === "upsert");
-    expect(upserts.map((c) => c.table)).toEqual(["budget_periods", "components", "audit_log"]);
-    for (const c of upserts) for (const r of c.rows ?? []) expect(r.study_id).toBe("study-1");
+    const writes = calls.filter((c) => c.op === "upsert" || c.op === "insert");
+    expect(writes.map((c) => c.table)).toEqual(["budget_periods", "components", "audit_log"]);
+    for (const c of writes) for (const r of c.rows ?? []) expect(r.study_id).toBe("study-1");
+  });
+
+  it("inserts audit rows and never upserts them", async () => {
+    const after = empty();
+    after.audit = [
+      {
+        id: "a",
+        entity: "line",
+        entityId: "l",
+        field: "x",
+        oldValue: null,
+        newValue: "y",
+        changedAt: "t",
+        changedBy: "me",
+      },
+    ];
+    await syncRemote(empty(), after, "study-1");
+    expect(calls.filter((c) => c.table === "audit_log").map((c) => c.op)).toEqual(["insert"]);
   });
 
   it("skips unchanged rows and scopes deletes to the study", async () => {
@@ -101,5 +132,21 @@ describe("loadRemote", () => {
     expect(d.lines[0]).not.toHaveProperty("studyId");
     expect(d.lines[0]).not.toHaveProperty("study_id");
     expect(d.lines[0]?.unitCostCents).toBe(5);
+  });
+});
+
+describe("isPlatformAdmin", () => {
+  it("is true only for a true answer", async () => {
+    rpcImpl = () => Promise.resolve({ data: true, error: null });
+    expect(await isPlatformAdmin()).toBe(true);
+    rpcImpl = () => Promise.resolve({ data: false, error: null });
+    expect(await isPlatformAdmin()).toBe(false);
+  });
+
+  it("fails closed on an error or a thrown request", async () => {
+    rpcImpl = () => Promise.resolve({ data: true, error: { message: "boom" } });
+    expect(await isPlatformAdmin()).toBe(false);
+    rpcImpl = () => Promise.reject(new Error("offline"));
+    expect(await isPlatformAdmin()).toBe(false);
   });
 });

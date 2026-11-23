@@ -187,7 +187,7 @@ export async function syncRemote(before: StoreData, after: StoreData, studyId: s
   }
   const audit = after.audit.map((a) => ({ ...toRow(a, COLS.audit), study_id: studyId }));
   for (let i = 0; i < audit.length; i += 500)
-    await run(from(TABLE.audit).upsert(audit.slice(i, i + 500) as never));
+    await run(from(TABLE.audit).insert(audit.slice(i, i + 500) as never));
   await removeEvidence(gone.map((a) => a.fileUrl));
   log.info("sync ok", { ...written, audit: audit.length });
 }
@@ -273,6 +273,18 @@ export async function listStudies(): Promise<Study[]> {
   return (studies.data as unknown as { id: string; name: string }[])
     .filter((s) => roles.has(s.id))
     .map((s) => ({ id: s.id, name: s.name, role: roles.get(s.id) as StudyRole }));
+}
+
+/** Fails closed: any error counts as not allowed. */
+export async function isPlatformAdmin(): Promise<boolean> {
+  try {
+    const { data, error } = await rpc("is_platform_admin", {});
+    if (error) throw new Error(error.message);
+    return data === true;
+  } catch (e) {
+    log.warn("platform admin check failed", { error: e instanceof Error ? e.message : String(e) });
+    return false;
+  }
 }
 
 export async function createStudy(name: string): Promise<string> {

@@ -47,6 +47,8 @@ export interface AuditRepo {
 }
 export interface StudyRepo {
   list(): Promise<Study[]>;
+  canCreate(): Promise<boolean>;
+  myEmail(): Promise<string>;
   create(name: string): Promise<string>;
   members(studyId: string): Promise<StudyMember[]>;
   addMember(studyId: string, email: string): Promise<boolean>;
@@ -68,6 +70,7 @@ import {
   listAudit,
   removeEvidence,
   listStudies,
+  isPlatformAdmin,
   createStudy,
   listStudyMembers,
   addStudyMember,
@@ -338,6 +341,8 @@ export const auditRepo: AuditRepo = { list: () => listAudit(activeStudyId()) };
 
 export const studyRepo: StudyRepo = {
   list: listStudies,
+  canCreate: isPlatformAdmin,
+  myEmail: currentUserLabel,
   create: createStudy,
   members: listStudyMembers,
   addMember: addStudyMember,

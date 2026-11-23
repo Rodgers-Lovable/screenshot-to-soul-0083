@@ -16,11 +16,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useCanCreateStudy } from "@/data/hooks";
 import { cn } from "@/lib/utils";
 import { useActiveStudy } from "./active-study-context";
 import { CreateStudyForm } from "./study-gate";
 
-/** Shows the active study and lets people switch or start another. */
+/** Shows the active study and lets people switch; platform admins can also start one. */
 export function StudySwitcher({
   period,
   variant,
@@ -29,6 +30,7 @@ export function StudySwitcher({
   variant: "sidebar" | "header";
 }) {
   const { study, studies, select } = useActiveStudy();
+  const canCreate = useCanCreateStudy().data === true;
   const [creating, setCreating] = useState(false);
   const side = variant === "sidebar";
   return (
@@ -69,21 +71,27 @@ export function StudySwitcher({
               {s.id === study.id && <Check className="h-4 w-4" aria-label="Current study" />}
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => setCreating(true)}>
-            <Plus className="h-4 w-4" aria-hidden />
-            New study
-          </DropdownMenuItem>
+          {canCreate && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setCreating(true)}>
+                <Plus className="h-4 w-4" aria-hidden />
+                New study
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <NewStudyDialogBody
-          onCreated={(id) => {
-            select(id);
-            setCreating(false);
-          }}
-        />
-      </Dialog>
+      {canCreate && (
+        <Dialog open={creating} onOpenChange={setCreating}>
+          <NewStudyDialogBody
+            onCreated={(id) => {
+              select(id);
+              setCreating(false);
+            }}
+          />
+        </Dialog>
+      )}
     </>
   );
 }

@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { rememberStudy, savedStudyId, setActiveStudyId } from "@/data/active-study";
-import { useCreateStudy, useStudies } from "@/data/hooks";
+import { useCanCreateStudy, useCreateStudy, useMyEmail, useStudies } from "@/data/hooks";
 import type { Study } from "@/lib/types";
 import { ActiveStudyCtx } from "./active-study-context";
 
 /** Picks the active study before the app renders, and remounts the app when it changes. */
 export function StudyGate({ children }: { children: ReactNode }) {
   const studies = useStudies();
+  const canCreate = useCanCreateStudy();
+  const me = useMyEmail();
   const [chosen, setChosen] = useState<string | null>(null);
 
   if (studies.isPending) return <Screen>Loading studies…</Screen>;
@@ -29,19 +31,34 @@ export function StudyGate({ children }: { children: ReactNode }) {
     );
 
   const list = studies.data;
-  if (!list.length)
+  if (!list.length) {
+    if (canCreate.isPending || me.isPending) return <Screen>Loading…</Screen>;
+    if (canCreate.data)
+      return (
+        <Shell title="Create your first study">
+          <p className="text-sm text-muted-foreground">
+            You can create studies. You become the study's admin and can add the team afterwards.
+          </p>
+          <CreateStudyForm onCreated={(id) => setChosen(id)} />
+          <Button variant="outline" onClick={() => supabase.auth.signOut()}>
+            Sign out
+          </Button>
+        </Shell>
+      );
     return (
-      <Shell title="Create your first study">
+      <Shell title="Waiting for access">
         <p className="text-sm text-muted-foreground">
-          To join an existing study, ask one of its members to add your email under Settings, Team.
-          Then reload this page.
+          Signed in as <span className="break-all font-medium text-foreground">{me.data}</span>.
         </p>
-        <CreateStudyForm onCreated={(id) => setChosen(id)} />
+        <p className="text-sm text-muted-foreground">
+          A study admin must add you to a study. Once they have, reload this page.
+        </p>
         <Button variant="outline" onClick={() => supabase.auth.signOut()}>
           Sign out
         </Button>
       </Shell>
     );
+  }
 
   const saved = savedStudyId();
   const study =
@@ -74,7 +91,7 @@ function Shell({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Creates a study and reports its id. Used by the first-run screen and the switcher dialog. */
+/** Creates a study (platform admins only) and reports its id. */
 export function CreateStudyForm({
   onCreated,
   autoFocus,

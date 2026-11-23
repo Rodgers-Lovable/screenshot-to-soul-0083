@@ -27,6 +27,10 @@ export const useAudit = () => useQuery({ queryKey: key("audit"), queryFn: () => 
 
 export const useStudies = () =>
   useQuery({ queryKey: ["studies"], queryFn: () => studyRepo.list() });
+export const useCanCreateStudy = () =>
+  useQuery({ queryKey: ["studies", "can-create"], queryFn: () => studyRepo.canCreate() });
+export const useMyEmail = () =>
+  useQuery({ queryKey: ["studies", "me"], queryFn: () => studyRepo.myEmail() });
 export const useStudyMembers = (studyId: string) =>
   useQuery({
     queryKey: ["study-members", studyId],

@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-/** Lists the active study's team; members add people, admins remove them and choose other admins. */
+/** Lists the active study's team; admins add and remove people and choose other admins. */
 export function TeamPanel() {
   const { study } = useActiveStudy();
   const members = useStudyMembers(study.id);
@@ -72,8 +72,10 @@ export function TeamPanel() {
       <CardHeader>
         <CardTitle className="text-base">Team · {study.name}</CardTitle>
         <CardDescription>
-          Only people on this list can see or change this study's budget and evidence files. They
-          must sign up first.
+          Only people on this list can see or change this study's budget and evidence files.
+          {isAdmin
+            ? " Admins add people here. They must sign up first."
+            : " Ask a study admin to add or remove people."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -105,18 +107,20 @@ export function TeamPanel() {
             </li>
           ))}
         </ul>
-        <form onSubmit={add} className="flex gap-2">
-          <Input
-            type="email"
-            required
-            placeholder="colleague@example.org"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <Button type="submit" disabled={addM.isPending}>
-            Add
-          </Button>
-        </form>
+        {isAdmin && (
+          <form onSubmit={add} className="flex gap-2">
+            <Input
+              type="email"
+              required
+              placeholder="colleague@example.org"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Button type="submit" disabled={addM.isPending}>
+              Add
+            </Button>
+          </form>
+        )}
       </CardContent>
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>
         <AlertDialogContent>

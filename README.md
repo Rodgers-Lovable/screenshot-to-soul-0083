@@ -30,7 +30,16 @@ You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is 
    npm run dev
    ```
 
-One app holds many studies, each with its own budget, evidence and team. After signing in, a person with no study creates one and becomes its admin. Everyone else signs up, then a member of the study adds their email under Settings, Team; the study then appears in the switcher. Admins can remove people and make other members admins, and a study always keeps at least one admin. Someone who has not been added to any study sees the create-a-study screen, not the data.
+One app holds many studies, each with its own budget, evidence and team. Only platform admins can create a study, and they become its admin. Everyone else signs up, then a study admin adds their email under Settings, Team; the study then appears in the switcher. Study admins also remove people and make other members admins, and a study always keeps at least one admin. Someone who has not been added to any study sees a "Waiting for access" screen, not the data. Platform admins see no study's data unless they are on its team.
+
+To make someone a platform admin, they sign up first. Then run this once in the Supabase SQL Editor, with their sign-up email in place of the placeholder:
+
+```sql
+insert into public.platform_admins (user_id)
+select id from auth.users where email = 'person@example.org';
+```
+
+The list has no client access, so the SQL Editor (or the service role) is the only way to change it.
 
 On their first visit, each team member gets a short tour of the Dashboard, Budget, Events and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
 
