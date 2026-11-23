@@ -30,7 +30,7 @@ You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is 
    npm run dev
    ```
 
-The first person to sign in claims the team and becomes admin. Admins can make other members admins, and the team always keeps at least one. Everyone else signs up, then a team member adds them under Settings, Team. An account that has not been added sees a waiting screen.
+One app holds many studies, each with its own budget, evidence and team. After signing in, a person with no study creates one and becomes its admin. Everyone else signs up, then a member of the study adds their email under Settings, Team; the study then appears in the switcher. Admins can remove people and make other members admins, and a study always keeps at least one admin. Someone who has not been added to any study sees the create-a-study screen, not the data.
 
 On their first visit, each team member gets a short tour of the Dashboard, Budget, Events and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
 

@@ -99,7 +99,7 @@ function PeriodForm() {
   const { period, events } = useBudgetData();
   const upd = useUpdatePeriod();
   const blank: BudgetPeriod = {
-    id: "p1",
+    id: "",
     projectName: "",
     name: "",
     startDate: "",

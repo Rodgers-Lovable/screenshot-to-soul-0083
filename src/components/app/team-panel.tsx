@@ -1,6 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { useAddMember, useRemoveMember, useSetAdmin, useStudyMembers } from "@/data/hooks";
+import type { StudyMember } from "@/lib/types";
+import { useActiveStudy } from "./active-study-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,86 +17,87 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Member = { user_id: string; email: string };
-
-/** Lists team members; members add people, admins remove them and choose other admins. */
+/** Lists the active study's team; members add people, admins remove them and choose other admins. */
 export function TeamPanel() {
-  const [rows, setRows] = useState<Member[]>([]);
-  const [admins, setAdmins] = useState<Set<string>>(new Set());
-  const [me, setMe] = useState<string>();
+  const { study } = useActiveStudy();
+  const members = useStudyMembers(study.id);
+  const addM = useAddMember();
+  const removeM = useRemoveMember();
+  const adminM = useSetAdmin();
   const [email, setEmail] = useState("");
-  const [removing, setRemoving] = useState<Member | null>(null);
-  const load = async () => {
-    const [{ data: m }, { data: r }, { data: u }] = await Promise.all([
-      supabase.from("team_members").select("user_id,email").order("added_at"),
-      supabase.from("user_roles").select("user_id").eq("role", "admin"),
-      supabase.auth.getUser(),
-    ]);
-    setRows(m ?? []);
-    setAdmins(new Set((r ?? []).map((x) => x.user_id)));
-    setMe(u.user?.id);
-  };
-  useEffect(() => {
-    load();
-  }, []);
-  const isAdmin = !!me && admins.has(me);
-  const add = async (e: FormEvent) => {
+  const [removing, setRemoving] = useState<StudyMember | null>(null);
+  const rows = members.data ?? [];
+  const adminCount = rows.filter((r) => r.role === "admin").length;
+  const isAdmin = rows.some((r) => r.isMe && r.role === "admin");
+  const add = (e: FormEvent) => {
     e.preventDefault();
-    const { data, error } = await supabase.rpc("add_team_member", { _email: email });
-    if (error) return void toast.error("Could not add this person.");
-    if (!data)
-      return void toast.error("No account with that email yet. Ask them to sign up first.");
-    toast.success("Added to the team");
-    setEmail("");
-    load();
+    addM.mutate(
+      { studyId: study.id, email },
+      {
+        onSuccess: (found) => {
+          if (!found)
+            return void toast.error("No account with that email yet. Ask them to sign up first.");
+          toast.success("Added to the study");
+          setEmail("");
+        },
+        onError: () => toast.error("Could not add this person."),
+      },
+    );
   };
-  const setAdmin = async (m: Member, isAdmin: boolean) => {
-    const { error } = await supabase.rpc("set_team_admin", {
-      _user_id: m.user_id,
-      _is_admin: isAdmin,
-    });
-    if (error) toast.error(error.message);
-    else toast.success(isAdmin ? `${m.email} is now an admin` : `${m.email} is no longer an admin`);
-    load();
-  };
-  const remove = async () => {
+  const setAdmin = (m: StudyMember, makeAdmin: boolean) =>
+    adminM.mutate(
+      { studyId: study.id, userId: m.userId, isAdmin: makeAdmin },
+      {
+        onSuccess: () =>
+          toast.success(
+            makeAdmin ? `${m.email} is now an admin` : `${m.email} is no longer an admin`,
+          ),
+        onError: (err) => toast.error(err.message),
+      },
+    );
+  const remove = () => {
     if (!removing) return;
-    const { error } = await supabase.rpc("remove_team_member", { _user_id: removing.user_id });
-    if (error) toast.error(error.message);
-    else toast.success(`${removing.email} no longer has access`);
+    const m = removing;
+    removeM.mutate(
+      { studyId: study.id, userId: m.userId },
+      {
+        onSuccess: () => toast.success(`${m.email} no longer has access`),
+        onError: (err) => toast.error(err.message),
+      },
+    );
     setRemoving(null);
-    load();
   };
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Team</CardTitle>
+        <CardTitle className="text-base">Team · {study.name}</CardTitle>
         <CardDescription>
-          Only people on this list can see or change the budget and evidence files. They must sign
-          up first.
+          Only people on this list can see or change this study's budget and evidence files. They
+          must sign up first.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        {members.isError && (
+          <p className="text-sm text-destructive">
+            Could not load the team: {members.error.message}
+          </p>
+        )}
         <ul className="divide-y rounded-md border text-sm">
           {rows.map((r) => (
-            <li key={r.user_id} className="flex items-center gap-2 px-3 py-2">
-              <span className="mr-auto">
+            <li key={r.userId} className="flex flex-wrap items-center gap-2 px-3 py-2">
+              <span className="mr-auto min-w-0 break-all">
                 {r.email}
-                {r.user_id === me && <span className="text-muted-foreground"> (you)</span>}
+                {r.isMe && <span className="text-muted-foreground"> (you)</span>}
               </span>
-              {admins.has(r.user_id) && (
+              {r.role === "admin" && (
                 <span className="rounded bg-secondary px-2 py-0.5 text-xs">Admin</span>
               )}
-              {isAdmin && (admins.size > 1 || !admins.has(r.user_id)) && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setAdmin(r, !admins.has(r.user_id))}
-                >
-                  {admins.has(r.user_id) ? "Remove admin" : "Make admin"}
+              {isAdmin && (adminCount > 1 || r.role !== "admin") && (
+                <Button size="sm" variant="ghost" onClick={() => setAdmin(r, r.role !== "admin")}>
+                  {r.role === "admin" ? "Remove admin" : "Make admin"}
                 </Button>
               )}
-              {isAdmin && r.user_id !== me && (
+              {isAdmin && !r.isMe && (
                 <Button size="sm" variant="ghost" onClick={() => setRemoving(r)}>
                   Remove
                 </Button>
@@ -110,7 +113,9 @@ export function TeamPanel() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Button type="submit">Add</Button>
+          <Button type="submit" disabled={addM.isPending}>
+            Add
+          </Button>
         </form>
       </CardContent>
       <AlertDialog open={!!removing} onOpenChange={(o) => !o && setRemoving(null)}>

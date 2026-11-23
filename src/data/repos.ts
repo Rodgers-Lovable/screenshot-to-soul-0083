@@ -7,6 +7,8 @@ import type {
   BudgetLine,
   BudgetPeriod,
   Component,
+  Study,
+  StudyMember,
 } from "@/lib/types";
 import { planOccurrenceChange } from "@/lib/calc";
 import { eventTitle, type StoreData } from "./store";
@@ -43,6 +45,14 @@ export interface AttachmentRepo {
 export interface AuditRepo {
   list(): Promise<AuditEntry[]>;
 }
+export interface StudyRepo {
+  list(): Promise<Study[]>;
+  create(name: string): Promise<string>;
+  members(studyId: string): Promise<StudyMember[]>;
+  addMember(studyId: string, email: string): Promise<boolean>;
+  removeMember(studyId: string, userId: string): Promise<void>;
+  setAdmin(studyId: string, userId: string, isAdmin: boolean): Promise<void>;
+}
 export interface AdminRepo {
   importLines(
     rows: { component: { id?: string; name: string }; line: Omit<LineInput, "componentId"> }[],
@@ -57,9 +67,16 @@ import {
   currentUserLabel,
   listAudit,
   removeEvidence,
+  listStudies,
+  createStudy,
+  listStudyMembers,
+  addStudyMember,
+  removeStudyMember,
+  setStudyAdmin,
 } from "./remote";
+import { activeStudyId } from "./active-study";
 
-// Working copy of the shared budget. Every repo call reloads it from Supabase,
+// Working copy of the active study's budget. Every write reloads it from Supabase,
 // applies the change in memory, then writes only the rows that changed back.
 let state: StoreData | null = null;
 let actor = "coordinator";
@@ -68,15 +85,14 @@ function db(): StoreData {
   if (!state) throw new Error("Budget not loaded");
   return state;
 }
-async function fresh() {
-  state = await loadRemote();
-  actor = await currentUserLabel();
-  return state;
-}
-async function tx<T>(fn: () => T | Promise<T>): Promise<T> {
-  const before = clone(await fresh());
+// The study is captured before any await, so a study switch cannot redirect the write.
+async function tx<T>(fn: () => T | Promise<T>, study = activeStudyId()): Promise<T> {
+  const [data, who] = await Promise.all([loadRemote(study), currentUserLabel()]);
+  state = data;
+  actor = who;
+  const before = clone(data);
   const r = await fn();
-  await syncRemote(before, db());
+  await syncRemote(before, data, study);
   return r;
 }
 const uid = () =>
@@ -122,7 +138,17 @@ function applyPatch<T extends { id: string }>(entity: string, rec: T, patch: Par
     }
   }
 }
-const read = async <T>(f: (d: StoreData) => T): Promise<T> => clone(f(await fresh()));
+const read = async <T>(f: (d: StoreData) => T): Promise<T> => {
+  const study = activeStudyId();
+  return clone(f(await loadRemote(study)));
+};
+function ensurePeriod(d: StoreData): BudgetPeriod {
+  if (!d.period) {
+    d.period = { id: uid(), projectName: "", name: "", startDate: "", endDate: "", fxRate: 125 };
+    auditCreate("period", d.period);
+  }
+  return d.period;
+}
 
 export const periodRepo: PeriodRepo = {
   get: () => read((d) => d.period),
@@ -131,13 +157,13 @@ export const periodRepo: PeriodRepo = {
       const d = db();
       if (!d.period) {
         d.period = {
-          id: "p1",
           projectName: "",
           name: "",
           startDate: "",
           endDate: "",
           fxRate: 125,
           ...patch,
+          id: uid(),
         };
         auditCreate("period", d.period);
       } else applyPatch("period", d.period, patch);
@@ -166,7 +192,7 @@ export const componentRepo: ComponentRepo = {
       const d = db();
       const c: Component = {
         id: uid(),
-        periodId: d.period?.id ?? "p1",
+        periodId: ensurePeriod(d).id,
         sortOrder: d.components.length + 1,
         ...input,
       };
@@ -278,7 +304,8 @@ export const eventRepo: EventRepo = {
 export const attachmentRepo: AttachmentRepo = {
   list: async () => signUrls(await read((d) => d.attachments)),
   add: async (eventId, file, label) => {
-    const path = await uploadEvidence(eventId, file);
+    const study = activeStudyId();
+    const path = await uploadEvidence(study, eventId, file);
     return tx(() => {
       const a: Attachment = {
         id: uid(),
@@ -293,7 +320,7 @@ export const attachmentRepo: AttachmentRepo = {
       db().attachments.push(a);
       audit("attachment", a.id, "(created)", null, `${a.fileName}${label ? ` · ${label}` : ""}`);
       return clone(a);
-    }).catch(async (e) => {
+    }, study).catch(async (e) => {
       await removeEvidence([path]);
       throw e;
     });
@@ -307,7 +334,16 @@ export const attachmentRepo: AttachmentRepo = {
     }),
 };
 
-export const auditRepo: AuditRepo = { list: () => listAudit() };
+export const auditRepo: AuditRepo = { list: () => listAudit(activeStudyId()) };
+
+export const studyRepo: StudyRepo = {
+  list: listStudies,
+  create: createStudy,
+  members: listStudyMembers,
+  addMember: addStudyMember,
+  removeMember: removeStudyMember,
+  setAdmin: setStudyAdmin,
+};
 
 export const adminRepo: AdminRepo = {
   importLines: (rows) =>
@@ -321,7 +357,7 @@ export const adminRepo: AdminRepo = {
           if (!cid) {
             const c: Component = {
               id: uid(),
-              periodId: d.period?.id ?? "p1",
+              periodId: ensurePeriod(d).id,
               code: String(d.components.length + 1),
               name: r.component.name,
               sortOrder: d.components.length + 1,

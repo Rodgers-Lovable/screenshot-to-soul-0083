@@ -7,25 +7,31 @@ import {
   eventRepo,
   lineRepo,
   periodRepo,
+  studyRepo,
 } from "./repos";
+import { activeStudyId } from "./active-study";
 
-const K = {
-  period: ["pbt", "period"],
-  components: ["pbt", "components"],
-  lines: ["pbt", "lines"],
-  events: ["pbt", "events"],
-  attachments: ["pbt", "attachments"],
-  audit: ["pbt", "audit"],
-} as const;
+// Keys carry the study id, computed at render, so each study has its own cache.
+const key = (name: string) => ["pbt", activeStudyId(), name] as const;
 
-export const usePeriod = () => useQuery({ queryKey: K.period, queryFn: () => periodRepo.get() });
+export const usePeriod = () =>
+  useQuery({ queryKey: key("period"), queryFn: () => periodRepo.get() });
 export const useComponents = () =>
-  useQuery({ queryKey: K.components, queryFn: () => componentRepo.list() });
-export const useLines = () => useQuery({ queryKey: K.lines, queryFn: () => lineRepo.list() });
-export const useEvents = () => useQuery({ queryKey: K.events, queryFn: () => eventRepo.list() });
+  useQuery({ queryKey: key("components"), queryFn: () => componentRepo.list() });
+export const useLines = () => useQuery({ queryKey: key("lines"), queryFn: () => lineRepo.list() });
+export const useEvents = () =>
+  useQuery({ queryKey: key("events"), queryFn: () => eventRepo.list() });
 export const useAttachments = () =>
-  useQuery({ queryKey: K.attachments, queryFn: () => attachmentRepo.list() });
-export const useAudit = () => useQuery({ queryKey: K.audit, queryFn: () => auditRepo.list() });
+  useQuery({ queryKey: key("attachments"), queryFn: () => attachmentRepo.list() });
+export const useAudit = () => useQuery({ queryKey: key("audit"), queryFn: () => auditRepo.list() });
+
+export const useStudies = () =>
+  useQuery({ queryKey: ["studies"], queryFn: () => studyRepo.list() });
+export const useStudyMembers = (studyId: string) =>
+  useQuery({
+    queryKey: ["study-members", studyId],
+    queryFn: () => studyRepo.members(studyId),
+  });
 
 /** All budget data at once; `ready` is false until every query resolves. */
 export function useBudgetData() {
@@ -81,3 +87,32 @@ export const useAddAttachment = () =>
   );
 export const useRemoveAttachment = () => useM(attachmentRepo.remove);
 export const useImportLines = () => useM(adminRepo.importLines);
+
+export function useCreateStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: studyRepo.create,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["studies"] }),
+  });
+}
+function useMemberM<A, R>(fn: (a: A) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["study-members"] }),
+        qc.invalidateQueries({ queryKey: ["studies"] }),
+      ]),
+  });
+}
+export const useAddMember = () =>
+  useMemberM((a: { studyId: string; email: string }) => studyRepo.addMember(a.studyId, a.email));
+export const useRemoveMember = () =>
+  useMemberM((a: { studyId: string; userId: string }) =>
+    studyRepo.removeMember(a.studyId, a.userId),
+  );
+export const useSetAdmin = () =>
+  useMemberM((a: { studyId: string; userId: string; isAdmin: boolean }) =>
+    studyRepo.setAdmin(a.studyId, a.userId, a.isAdmin),
+  );
