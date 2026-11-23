@@ -24,3 +24,29 @@ export function savedStudyId(): string | null {
     return null;
   }
 }
+
+// The workplan year every data call is scoped to. It can be null while a study has no year yet.
+const YEAR_KEY = "pbt-active-year:";
+let activeYear: string | null = null;
+
+export function activePeriodId(): string | null {
+  return activeYear;
+}
+/** Safe to call during render: it does not touch storage. */
+export function setActivePeriodId(id: string | null) {
+  activeYear = id;
+}
+export function rememberYear(studyId: string, periodId: string) {
+  try {
+    localStorage.setItem(YEAR_KEY + studyId, periodId);
+  } catch {
+    // Storage can be blocked; the choice just isn't remembered.
+  }
+}
+export function savedYearId(studyId: string): string | null {
+  try {
+    return localStorage.getItem(YEAR_KEY + studyId);
+  } catch {
+    return null;
+  }
+}

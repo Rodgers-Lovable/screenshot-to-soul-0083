@@ -162,8 +162,8 @@ export function LineEditor({
       else await create.mutateAsync(payload);
       toast.success(line ? "Line updated" : "Line added");
       onOpenChange(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save");
+    } catch {
+      // The mutation hook already showed the error.
     }
   }
 

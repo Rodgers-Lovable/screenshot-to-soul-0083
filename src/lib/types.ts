@@ -13,6 +13,9 @@ export const COST_CATEGORIES: CostCategory[] = [
   "Other",
 ];
 
+export type YearStatus = "open" | "closed";
+
+/** A workplan year. */
 export interface BudgetPeriod {
   id: string;
   projectName: string;
@@ -20,6 +23,9 @@ export interface BudgetPeriod {
   startDate: string;
   endDate: string;
   fxRate: number;
+  currency: string;
+  status: YearStatus;
+  copiedFromId?: string;
 }
 
 export interface Component {
@@ -97,4 +103,76 @@ export interface StudyMember {
   email: string;
   role: StudyRole;
   isMe: boolean;
+}
+
+export type ActivityKind = "general" | "site";
+export type RepeatUnit = "weeks" | "months";
+
+export interface Site {
+  id: string;
+  name: string;
+  sortOrder: number;
+  archivedAt?: string;
+}
+export interface Objective {
+  id: string;
+  periodId: string;
+  code: string;
+  title: string;
+  sortOrder: number;
+  copiedFromId?: string;
+}
+export interface Outcome {
+  id: string;
+  objectiveId: string;
+  code: string;
+  title: string;
+  sortOrder: number;
+  copiedFromId?: string;
+}
+export interface Activity {
+  id: string;
+  outcomeId: string;
+  code: string;
+  title: string;
+  kind: ActivityKind;
+  output: string;
+  meansOfVerification: string;
+  frequencyLabel: string;
+  repeatEvery?: number;
+  repeatUnit?: RepeatUnit;
+  notes: string;
+  sortOrder: number;
+  copiedFromId?: string;
+}
+export interface ActivityIndicator {
+  id: string;
+  activityId: string;
+  name: string;
+  target?: number;
+  sortOrder: number;
+  copiedFromId?: string;
+}
+export interface ActivityResponsible {
+  id: string;
+  activityId: string;
+  name: string;
+  userId?: string;
+  sortOrder: number;
+}
+export interface ActivitySite {
+  activityId: string;
+  siteId: string;
+}
+
+/** The workplan rows of one year, plus the study's site list. */
+export interface WorkplanData {
+  sites: Site[];
+  objectives: Objective[];
+  outcomes: Outcome[];
+  activities: Activity[];
+  indicators: ActivityIndicator[];
+  responsibles: ActivityResponsible[];
+  activitySites: ActivitySite[];
+  audit: AuditEntry[];
 }

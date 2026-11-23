@@ -1,7 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Download, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  ArchiveRestore,
+  Download,
+  Lock,
+  LockOpen,
+  Pencil,
+  Plus,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,7 +34,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAudit, useBudgetData, useImportLines, useUpdatePeriod } from "@/data/hooks";
+import {
+  useAddSite,
+  useArchiveSite,
+  useAudit,
+  useBudgetData,
+  useImportLines,
+  useRenameSite,
+  useSetYearStatus,
+  useUpdatePeriod,
+  useWorkplan,
+} from "@/data/hooks";
 import {
   exportWorkbook,
   parseBudgetRows,
@@ -45,16 +65,22 @@ import {
 } from "@/lib/types";
 import { PageHeader } from "@/components/app/shell";
 import { TeamPanel } from "@/components/app/team-panel";
+import { useYear } from "@/components/app/active-year-context";
+import { CreateYearDialog } from "@/components/app/create-year-dialog";
+import { validateYear } from "@/lib/workplan";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings · Project Budget Tracker" },
-      { name: "description", content: "Period, exchange rate, Excel import/export and audit log." },
+      {
+        name: "description",
+        content: "Years, sites, exchange rate, Excel import/export and audit log.",
+      },
       { property: "og:title", content: "Settings · Project Budget Tracker" },
       {
         property: "og:description",
-        content: "Period, exchange rate, Excel import/export and audit log.",
+        content: "Years, sites, exchange rate, Excel import/export and audit log.",
       },
     ],
   }),
@@ -66,8 +92,10 @@ function SettingsPage() {
     <div>
       <PageHeader title="Settings" />
       <Tabs defaultValue="period">
-        <TabsList className="flex-wrap" data-tour="settings-tabs">
-          <TabsTrigger value="period">Period</TabsTrigger>
+        <TabsList className="h-auto flex-wrap" data-tour="settings-tabs">
+          <TabsTrigger value="period">Year</TabsTrigger>
+          <TabsTrigger value="years">Years</TabsTrigger>
+          <TabsTrigger value="sites">Sites</TabsTrigger>
           <TabsTrigger value="import">Import</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
@@ -77,6 +105,12 @@ function SettingsPage() {
         </TabsList>
         <TabsContent value="period">
           <PeriodForm />
+        </TabsContent>
+        <TabsContent value="years">
+          <YearsPanel />
+        </TabsContent>
+        <TabsContent value="sites">
+          <SitesPanel />
         </TabsContent>
         <TabsContent value="import">
           <ImportPanel />
@@ -97,6 +131,7 @@ function SettingsPage() {
 
 function PeriodForm() {
   const { period, events } = useBudgetData();
+  const { years, isAdmin, closed, year } = useYear();
   const upd = useUpdatePeriod();
   const blank: BudgetPeriod = {
     id: "",
@@ -105,22 +140,28 @@ function PeriodForm() {
     startDate: "",
     endDate: "",
     fxRate: 125,
+    currency: "KES",
+    status: "open",
   };
   const [v, setV] = useState<BudgetPeriod>(period ?? blank);
   const [confirmFx, setConfirmFx] = useState(false);
   useEffect(() => {
     if (period) setV(period);
   }, [period]);
+  const readOnly = !isAdmin || closed || !year;
   const anyDone = events.some((e) => e.status === "done");
-  const invalid =
-    !v.projectName.trim() ||
-    !v.name.trim() ||
-    !v.startDate ||
-    !v.endDate ||
-    v.endDate <= v.startDate ||
-    !(v.fxRate > 0);
+  const problem = validateYear(
+    { ...v, currency: v.currency.trim().toUpperCase() },
+    years,
+    year?.id,
+  );
+  const invalid = !!problem || !v.projectName.trim();
 
-  const doSave = () => upd.mutate(v, { onSuccess: () => toast.success("Period saved") });
+  const doSave = () =>
+    upd.mutate(
+      { ...v, currency: v.currency.trim().toUpperCase() },
+      { onSuccess: () => toast.success("Year saved") },
+    );
   const save = () =>
     anyDone && period && v.fxRate !== period.fxRate ? setConfirmFx(true) : doSave();
   const field = (k: keyof BudgetPeriod, label: string, type = "text") => (
@@ -130,7 +171,7 @@ function PeriodForm() {
         id={k}
         type={type}
         step={type === "number" ? "any" : undefined}
-        value={String(v[k])}
+        value={String(v[k] ?? "")}
         onChange={(e) =>
           setV({ ...v, [k]: type === "number" ? Number(e.target.value) : e.target.value })
         }
@@ -141,27 +182,41 @@ function PeriodForm() {
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Budget period</CardTitle>
+          <CardTitle className="text-base">Year details</CardTitle>
+          {readOnly && (
+            <CardDescription>
+              {!year
+                ? "There is no year yet. Create one under Years."
+                : closed
+                  ? "This year is closed. Reopen it under Years to change these details."
+                  : "Only study admins can change the dates, exchange rate and currency."}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {field("projectName", "Project name")}
-            {field("name", "Period name")}
-            {field("startDate", "Start date", "date")}
-            {field("endDate", "End date", "date")}
-          </div>
-          <div className="space-y-1">
-            {field("fxRate", "Exchange rate (KES per 1 USD)", "number")}
-            <p className="text-xs text-muted-foreground">
-              Used to convert all KES amounts to USD for display
-            </p>
-          </div>
-          {v.endDate && v.startDate && v.endDate <= v.startDate && (
-            <p className="text-sm text-destructive">End date must be after start date.</p>
-          )}
-          <Button onClick={save} disabled={invalid}>
-            Save period
-          </Button>
+          <fieldset disabled={readOnly} className="min-w-0 space-y-3 border-0 p-0">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {field("projectName", "Project name")}
+              {field("name", "Year name")}
+              {field("startDate", "Start date", "date")}
+              {field("endDate", "End date", "date")}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                {field("fxRate", "Exchange rate to USD", "number")}
+                <p className="text-xs text-muted-foreground">
+                  Used to convert amounts to USD for display
+                </p>
+              </div>
+              {field("currency", "Currency code")}
+            </div>
+            {!readOnly && problem && v.name && v.startDate && v.endDate && (
+              <p className="text-sm text-destructive">{problem}</p>
+            )}
+            <Button onClick={save} disabled={invalid || upd.isPending}>
+              Save year
+            </Button>
+          </fieldset>
         </CardContent>
       </Card>
 
@@ -186,9 +241,283 @@ function PeriodForm() {
   );
 }
 
+function YearsPanel() {
+  const { years, isAdmin, year, select } = useYear();
+  const setStatus = useSetYearStatus();
+  const [creating, setCreating] = useState(false);
+  const [target, setTarget] = useState<{ id: string; name: string; to: "open" | "closed" } | null>(
+    null,
+  );
+  const sorted = [...years].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  const nameOf = (id?: string) => years.find((y) => y.id === id)?.name;
+  const confirm = () => {
+    if (!target) return;
+    const t = target;
+    setStatus.mutate(
+      { id: t.id, status: t.to },
+      {
+        onSuccess: () =>
+          toast.success(t.to === "closed" ? `${t.name} closed` : `${t.name} reopened`),
+      },
+    );
+    setTarget(null);
+  };
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="text-base">Years</CardTitle>
+          <CardDescription>
+            Each year has its own workplan and budget. A closed year is read-only until an admin
+            reopens it.
+            {!isAdmin && " Only study admins can create, close or reopen a year."}
+          </CardDescription>
+        </div>
+        {isAdmin && (
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" />
+            {years.length ? "Start a new year" : "Create the first year"}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!sorted.length && <p className="text-sm text-muted-foreground">No years yet.</p>}
+        <ul className="divide-y rounded-md border text-sm">
+          {sorted.map((y) => (
+            <li key={y.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+              <div className="mr-auto min-w-0">
+                <p className="font-medium">
+                  {y.name}
+                  {y.id === year?.id && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">Viewing</span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {y.startDate} to {y.endDate} · {y.currency}
+                  {y.copiedFromId &&
+                    nameOf(y.copiedFromId) &&
+                    ` · Copied from ${nameOf(y.copiedFromId)}`}
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs">
+                {y.status === "closed" ? (
+                  <>
+                    <Lock className="h-3 w-3" aria-hidden />
+                    Closed
+                  </>
+                ) : (
+                  "Open"
+                )}
+              </span>
+              {y.id !== year?.id && (
+                <Button size="sm" variant="ghost" onClick={() => select(y.id)}>
+                  View
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setTarget({
+                      id: y.id,
+                      name: y.name,
+                      to: y.status === "closed" ? "open" : "closed",
+                    })
+                  }
+                >
+                  {y.status === "closed" ? (
+                    <>
+                      <LockOpen className="h-4 w-4" />
+                      Reopen
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      Close
+                    </>
+                  )}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+      {isAdmin && <CreateYearDialog open={creating} onOpenChange={setCreating} />}
+      <AlertDialog open={!!target} onOpenChange={(o) => !o && setTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {target?.to === "closed" ? `Close ${target.name}?` : `Reopen ${target?.name}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {target?.to === "closed"
+                ? "Nobody can add, edit or delete anything in this year, including spending and evidence, until it is reopened."
+                : "Team members can change this year again. The reopening is recorded in the audit log."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirm}>
+              {target?.to === "closed" ? "Close year" : "Reopen year"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+function SitesPanel() {
+  const { isAdmin } = useYear();
+  const wp = useWorkplan();
+  const add = useAddSite();
+  const rename = useRenameSite();
+  const archive = useArchiveSite();
+  const [name, setName] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [en, setEn] = useState("");
+  const sites = [...(wp.data?.sites ?? [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+  );
+  const active = sites.filter((s) => !s.archivedAt);
+  const archived = sites.filter((s) => s.archivedAt);
+  const row = (s: (typeof sites)[number]) => (
+    <li key={s.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+      {editing === s.id ? (
+        <>
+          <Input
+            aria-label="Site name"
+            className="min-w-40 flex-1"
+            value={en}
+            onChange={(e) => setEn(e.target.value)}
+          />
+          <Button
+            size="sm"
+            disabled={!en.trim() || rename.isPending}
+            onClick={() =>
+              rename.mutate({ id: s.id, name: en }, { onSuccess: () => setEditing(null) })
+            }
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+        </>
+      ) : (
+        <>
+          <span
+            className={`mr-auto min-w-0 break-words ${s.archivedAt ? "text-muted-foreground" : ""}`}
+          >
+            {s.name}
+          </span>
+          {isAdmin && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditing(s.id);
+                  setEn(s.name);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+                Rename
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  archive.mutate(
+                    { id: s.id, archived: !s.archivedAt },
+                    {
+                      onSuccess: () =>
+                        toast.success(s.archivedAt ? "Site restored" : "Site archived"),
+                    },
+                  )
+                }
+              >
+                {s.archivedAt ? (
+                  <>
+                    <ArchiveRestore className="h-4 w-4" />
+                    Restore
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-4 w-4" />
+                    Archive
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </>
+      )}
+    </li>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Sites</CardTitle>
+        <CardDescription>
+          One list for the whole study. Each site activity picks the sites where it runs. Archive a
+          site to stop using it; past years keep it.
+          {!isAdmin && " Only study admins can change the list."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {wp.isError && (
+          <p className="text-sm text-destructive">Could not load sites: {wp.error.message}</p>
+        )}
+        {!active.length && wp.isSuccess && (
+          <p className="text-sm text-muted-foreground">No sites yet.</p>
+        )}
+        {active.length > 0 && (
+          <ul className="divide-y rounded-md border text-sm">{active.map(row)}</ul>
+        )}
+        {isAdmin && (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              add.mutate(name, {
+                onSuccess: () => {
+                  setName("");
+                  toast.success("Site added");
+                },
+              });
+            }}
+          >
+            <Input
+              aria-label="New site"
+              placeholder="Site name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Button type="submit" disabled={!name.trim() || add.isPending}>
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </form>
+        )}
+        {archived.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Archived
+            </p>
+            <ul className="divide-y rounded-md border text-sm">{archived.map(row)}</ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 const NEW = "__new";
 function ImportPanel() {
   const { components } = useBudgetData();
+  const { canEdit } = useYear();
   const imp = useImportLines();
   const [blocks, setBlocks] = useState<
     (ParsedBlock & { componentId: string; newName: string; group: string })[]
@@ -273,12 +602,20 @@ function ImportPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
+        {!canEdit && (
+          <p className="text-sm text-muted-foreground">
+            Import is off because there is no open year to import into.
+          </p>
+        )}
+        <Label
+          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${canEdit ? "cursor-pointer hover:bg-muted" : "pointer-events-none opacity-50"}`}
+        >
           <Upload className="h-4 w-4" />
           {fileName || "Choose .xlsx file"}
           <input
             type="file"
             accept=".xlsx"
+            disabled={!canEdit}
             className="hidden"
             onChange={(e) => onFile(e.target.files?.[0])}
           />
@@ -402,7 +739,7 @@ function ImportPanel() {
           </div>
         ))}
         {rows.length > 0 && (
-          <Button onClick={confirm} disabled={imp.isPending}>
+          <Button onClick={confirm} disabled={imp.isPending || !canEdit}>
             Import {rows.length} line(s)
           </Button>
         )}
@@ -488,7 +825,7 @@ function PeriodGlance() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Period at a glance</CardTitle>
+        <CardTitle className="text-base">Year at a glance</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="space-y-2">

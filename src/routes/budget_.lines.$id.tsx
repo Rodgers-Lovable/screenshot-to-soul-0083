@@ -13,6 +13,7 @@ import { Money, useFmt } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
 import { useRecord } from "@/components/app/shell";
+import { useYear } from "@/components/app/active-year-context";
 import { Truncated } from "@/components/app/truncated";
 import { ScheduleDialog } from "@/components/app/schedule-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -38,6 +39,7 @@ function LineDetail() {
   const d = useBudgetData();
   const f = useFmt();
   const { open } = useRecord();
+  const { canEdit } = useYear();
   const [edit, setEdit] = useState(false);
   const [scheduling, setScheduling] = useState(false);
   const line = d.lines.find((l) => l.id === id);
@@ -110,12 +112,12 @@ function LineDetail() {
           </div>
           <div className="flex gap-2">
             {events.some((e) => e.status === "planned") && (
-              <Button variant="outline" onClick={() => setScheduling(true)}>
+              <Button variant="outline" disabled={!canEdit} onClick={() => setScheduling(true)}>
                 <CalendarClock className="h-4 w-4" />
                 Schedule
               </Button>
             )}
-            <Button variant="outline" onClick={() => setEdit(true)}>
+            <Button variant="outline" disabled={!canEdit} onClick={() => setEdit(true)}>
               <Pencil className="h-4 w-4" />
               Edit line
             </Button>
@@ -207,7 +209,7 @@ function LineDetail() {
                     <td className="num">{n}</td>
                     <td>
                       <Button size="sm" variant="outline" onClick={() => open(e.id)}>
-                        Record
+                        {canEdit ? "Record" : "View"}
                       </Button>
                     </td>
                   </tr>
@@ -277,6 +279,7 @@ function FinanceCard({
   reported: number;
 }) {
   const upd = useUpdateLine();
+  const { canEdit } = useYear();
   const [val, setVal] = useState(posted !== undefined ? String(posted / 100) : "");
   const p = posted ?? 0;
   return (
@@ -289,6 +292,7 @@ function FinanceCard({
           <Label htmlFor="fin">Finance-posted amount (KES)</Label>
           <Input
             id="fin"
+            disabled={!canEdit}
             type="number"
             step="any"
             value={val}

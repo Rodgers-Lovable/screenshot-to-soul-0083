@@ -5,6 +5,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Download, Eye, FileUp, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useYear } from "./active-year-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -52,6 +53,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const { attachments } = useBudgetData();
   const files = attachments.filter((a) => a.eventId === ev.id);
   const f = useFmt();
+  const { canEdit, closed } = useYear();
   const update = useUpdateEvent();
   const addAtt = useAddAttachment();
   const rmAtt = useRemoveAttachment();
@@ -107,7 +109,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   })();
 
   function addFiles(list: FileList | null) {
-    if (!list) return;
+    if (!list || !canEdit) return;
     const next: { file: File; label: string }[] = [];
     for (const file of Array.from(list)) {
       if (!OK_TYPES.test(file.name)) {
@@ -124,6 +126,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   }
 
   async function uploadPending() {
+    if (!canEdit) return 0;
     for (const p of pending)
       await addAtt.mutateAsync({ eventId: ev.id, file: p.file, label: p.label || undefined });
     const n = pending.length;
@@ -162,14 +165,18 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           status === "done" ? "Marked done" : status === "cancelled" ? "Event cancelled" : "Saved",
         );
       onDone?.();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save");
+    } catch {
+      // The mutation hook already showed the error.
     }
   }
 
   async function reopen() {
-    await update.mutateAsync({ id: ev.id, patch: { status: "planned" } });
-    toast.success("Event reopened");
+    try {
+      await update.mutateAsync({ id: ev.id, patch: { status: "planned" } });
+      toast.success("Event reopened");
+    } catch {
+      // The mutation hook already showed the error.
+    }
   }
 
   const num = (name: "quantity" | "unitCost" | "duration", label: string, suffix: string) => (
@@ -193,7 +200,12 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   );
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={!canEdit} className="min-w-0 space-y-5 border-0 p-0">
+      {closed && (
+        <p className="rounded-md border bg-muted px-3 py-2 text-sm">
+          This year is closed. Actuals and evidence can be viewed but not changed.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip status={ev.status} />
         <span className="text-sm text-muted-foreground">
@@ -384,7 +396,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </fieldset>
   );
 }
 

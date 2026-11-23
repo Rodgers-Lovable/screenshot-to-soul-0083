@@ -141,6 +141,8 @@ describe("burn rate", () => {
     startDate: "2026-01-01",
     endDate: "2026-12-31",
     fxRate: 125,
+    currency: "KES",
+    status: "open" as const,
   };
   const l = line({ occurrences: 2 });
   it("behind plan when spent is >10pp lower", () => {

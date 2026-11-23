@@ -1,6 +1,6 @@
 # Study Budget Tracker
 
-Tracks a project budget in Kenyan shillings. Plan components and budget lines, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
+Tracks a project budget in Kenyan shillings. Plan each year's objectives, outcomes and activities, plan components and budget lines, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
 
 Built with TanStack Start, React 19, Tailwind v4 and shadcn/ui. Data, sign-in and evidence files live in a Supabase project.
 
@@ -41,7 +41,16 @@ select id from auth.users where email = 'person@example.org';
 
 The list has no client access, so the SQL Editor (or the service role) is the only way to change it.
 
-On their first visit, each team member gets a short tour of the Dashboard, Budget, Events and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
+On their first visit, each team member gets a short tour of the Dashboard, Activities, Budget, Spending and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
+
+## Workplan years
+
+Each study plans and budgets by year. A year (Settings, Years) has its own dates, exchange rate, currency, workplan and budget. The year switcher in the header changes which year every page shows; the choice is remembered per study.
+
+- Only study admins create years, edit a year's dates and exchange rate, close or reopen a year, and manage the study's site list (Settings, Sites). A study with no year asks an admin to create the first one.
+- Start a new year blank, or from an earlier year. Copying brings over objectives, outcomes, activities, indicators, responsible people and site choices. It never copies budget lines, spending, receipts or evidence. Years cannot overlap.
+- A closed year is read-only for everyone: workplan, budget lines, spending, actuals and evidence. The database enforces this, not just the screens. Only an admin can reopen it, and both actions go in the audit log.
+- Pages: Activities (`/activities`) is the workplan tree, with a detail page per activity (`/activities/:id`) for indicators, responsible people and sites. Spending (`/spending`) is the old Events page; `/events` links still redirect to it.
 
 ## Scripts
 
