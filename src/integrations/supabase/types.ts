@@ -377,7 +377,9 @@ export type Database = {
       };
       budget_lines: {
         Row: {
-          component_id: string;
+          activity_id: string;
+          component_id: string | null;
+          copied_from_id: string | null;
           cost_category: string | null;
           description: string;
           duration: number;
@@ -395,7 +397,9 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
-          component_id: string;
+          activity_id: string;
+          component_id?: string | null;
+          copied_from_id?: string | null;
           cost_category?: string | null;
           description: string;
           duration: number;
@@ -412,7 +416,9 @@ export type Database = {
           unit_cost_cents: number;
         };
         Update: {
-          component_id?: string;
+          activity_id?: string;
+          component_id?: string | null;
+          copied_from_id?: string | null;
           cost_category?: string | null;
           description?: string;
           duration?: number;
@@ -430,10 +436,24 @@ export type Database = {
         };
         Relationships: [
           {
+            foreignKeyName: "budget_lines_activity_study_fkey";
+            columns: ["activity_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
             foreignKeyName: "budget_lines_component_study_fkey";
             columns: ["component_id", "study_id"];
             isOneToOne: false;
             referencedRelation: "components";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "budget_lines_copied_from_fkey";
+            columns: ["copied_from_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "budget_lines";
             referencedColumns: ["id", "study_id"];
           },
           {
@@ -851,6 +871,7 @@ export type Database = {
       create_study: { Args: { _name: string }; Returns: string };
       create_workplan_year: {
         Args: {
+          _copy_budget_lines?: boolean;
           _copy_from_period_id?: string;
           _currency: string;
           _end_date: string;
