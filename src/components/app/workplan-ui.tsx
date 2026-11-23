@@ -209,7 +209,7 @@ export function ActivityFields({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="general">General: happens once for the study</SelectItem>
+              <SelectItem value="general">General</SelectItem>
               <SelectItem value="site">Site: happens at chosen sites</SelectItem>
             </SelectContent>
           </Select>
