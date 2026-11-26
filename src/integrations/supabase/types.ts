@@ -216,7 +216,8 @@ export type Database = {
       };
       attachments: {
         Row: {
-          event_id: string;
+          delivery_id: string | null;
+          event_id: string | null;
           file_name: string;
           file_url: string;
           id: string;
@@ -228,7 +229,8 @@ export type Database = {
         };
         ComputedFields: never;
         Insert: {
-          event_id: string;
+          delivery_id?: string | null;
+          event_id?: string | null;
           file_name: string;
           file_url: string;
           id: string;
@@ -239,7 +241,8 @@ export type Database = {
           uploaded_at: string;
         };
         Update: {
-          event_id?: string;
+          delivery_id?: string | null;
+          event_id?: string | null;
           file_name?: string;
           file_url?: string;
           id?: string;
@@ -250,6 +253,13 @@ export type Database = {
           uploaded_at?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "attachments_delivery_study_fkey";
+            columns: ["delivery_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "deliveries";
+            referencedColumns: ["id", "study_id"];
+          },
           {
             foreignKeyName: "attachments_event_study_fkey";
             columns: ["event_id", "study_id"];
@@ -317,6 +327,7 @@ export type Database = {
           actual_duration: number | null;
           actual_quantity: number | null;
           actual_unit_cost_cents: number | null;
+          delivery_id: string | null;
           id: string;
           line_id: string;
           location: string | null;
@@ -333,6 +344,7 @@ export type Database = {
           actual_duration?: number | null;
           actual_quantity?: number | null;
           actual_unit_cost_cents?: number | null;
+          delivery_id?: string | null;
           id: string;
           line_id: string;
           location?: string | null;
@@ -348,6 +360,7 @@ export type Database = {
           actual_duration?: number | null;
           actual_quantity?: number | null;
           actual_unit_cost_cents?: number | null;
+          delivery_id?: string | null;
           id?: string;
           line_id?: string;
           location?: string | null;
@@ -359,6 +372,13 @@ export type Database = {
           title?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "budget_events_delivery_study_fkey";
+            columns: ["delivery_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "deliveries";
+            referencedColumns: ["id", "study_id"];
+          },
           {
             foreignKeyName: "budget_events_line_study_fkey";
             columns: ["line_id", "study_id"];
@@ -560,6 +580,118 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "studies";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      deliveries: {
+        Row: {
+          activity_id: string;
+          actual_date: string | null;
+          created_at: string;
+          id: string;
+          notes: string;
+          planned_date: string | null;
+          round_label: string;
+          round_number: number;
+          site_id: string | null;
+          status: string;
+          study_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          activity_id: string;
+          actual_date?: string | null;
+          created_at?: string;
+          id: string;
+          notes?: string;
+          planned_date?: string | null;
+          round_label?: string;
+          round_number: number;
+          site_id?: string | null;
+          status?: string;
+          study_id: string;
+        };
+        Update: {
+          activity_id?: string;
+          actual_date?: string | null;
+          created_at?: string;
+          id?: string;
+          notes?: string;
+          planned_date?: string | null;
+          round_label?: string;
+          round_number?: number;
+          site_id?: string | null;
+          status?: string;
+          study_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_activity_study_fkey";
+            columns: ["activity_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "deliveries_site_study_fkey";
+            columns: ["site_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "sites";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "deliveries_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      delivery_indicator_results: {
+        Row: {
+          delivery_id: string;
+          indicator_id: string;
+          notes: string;
+          study_id: string;
+          value: number;
+        };
+        ComputedFields: never;
+        Insert: {
+          delivery_id: string;
+          indicator_id: string;
+          notes?: string;
+          study_id: string;
+          value: number;
+        };
+        Update: {
+          delivery_id?: string;
+          indicator_id?: string;
+          notes?: string;
+          study_id?: string;
+          value?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "delivery_indicator_results_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "results_delivery_study_fkey";
+            columns: ["delivery_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "deliveries";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "results_indicator_study_fkey";
+            columns: ["indicator_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "activity_indicators";
+            referencedColumns: ["id", "study_id"];
           },
         ];
       };
