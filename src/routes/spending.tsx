@@ -372,8 +372,8 @@ function SpendingPage() {
           all={ALL}
         />
         <FilterSelect
-          label="Delivery"
-          plural="deliveries"
+          label="Round"
+          plural="rounds"
           value={search.delivery}
           onChange={(v) => set({ delivery: v })}
           opts={[...deliveryText.entries()]
@@ -583,7 +583,7 @@ function SpendingPage() {
                 {th("date", tab === "done" ? "Date" : "Planned date")}
                 {th("title", "Event")}
                 <th className="px-3 py-2 text-left font-medium">Line</th>
-                <th className="px-3 py-2 text-left font-medium">Delivery</th>
+                <th className="px-3 py-2 text-left font-medium">Round</th>
                 {th("status", "Status")}
                 <th className="px-3 py-2 text-left font-medium">Flags</th>
                 {th("actual", "Actual", true)}

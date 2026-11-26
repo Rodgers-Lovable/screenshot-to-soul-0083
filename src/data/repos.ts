@@ -490,7 +490,7 @@ export const attachmentRepo: AttachmentRepo = {
     const path = await uploadEvidence(scope.study, folder, file);
     return tx(() => {
       if ("deliveryId" in target && !db().deliveries.some((x) => x.id === target.deliveryId))
-        throw new Error("Delivery not found");
+        throw new Error("Round not found");
       const a: Attachment = {
         id: uid(),
         ...owner,
@@ -1013,7 +1013,7 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const deliveryOf = (id: string) =>
   found(
     db().deliveries.find((x) => x.id === id),
-    "Delivery",
+    "Round",
   );
 function siteLabel(siteId?: string) {
   return siteId ? (db().sites.find((s) => s.id === siteId)?.name ?? "a site") : "";
@@ -1084,11 +1084,11 @@ export const deliveryRepo: DeliveryRepo = {
       if (a.kind === "general" && siteId)
         throw new Error("A general activity is not tied to a site.");
       if (a.kind === "site") {
-        if (!siteId) throw new Error("Choose the site for this delivery.");
+        if (!siteId) throw new Error("Choose the site for this round.");
         const sel = activeSelected(activityId).find((s) => s.id === siteId);
         if (!sel) throw new Error("That site is not selected on this activity.");
         if (sel.archived)
-          throw new Error("That site is archived. Restore it before adding deliveries there.");
+          throw new Error("That site is archived. Restore it before adding rounds there.");
       }
       const round = input.roundNumber ?? nextRound(mine, siteId);
       if (!Number.isInteger(round) || round < 1)

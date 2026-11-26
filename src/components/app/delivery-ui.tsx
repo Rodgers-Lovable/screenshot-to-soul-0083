@@ -114,13 +114,13 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
     <Card data-tour="deliveries">
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <div>
-          <CardTitle className="text-base">Deliveries</CardTitle>
+          <CardTitle className="text-base">Rounds</CardTitle>
           <CardDescription>
             {mine.length
-              ? `${progress.completed} of ${progress.total} completed`
+              ? `${progress.completed} of ${progress.total} done`
               : activity.kind === "site"
-                ? "One delivery per chosen site for each round. Create the rounds to start tracking."
-                : "One delivery per round. Create the rounds to start tracking."}
+                ? "Each round runs at every chosen site. Create the rounds to start tracking."
+                : "Create the rounds to start tracking."}
           </CardDescription>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -183,9 +183,9 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
             </Select>
           </div>
         )}
-        {!mine.length && <p className="text-sm text-muted-foreground">No deliveries yet.</p>}
+        {!mine.length && <p className="text-sm text-muted-foreground">No rounds yet.</p>}
         {!!mine.length && !shown.length && (
-          <p className="text-sm text-muted-foreground">No deliveries match these filters.</p>
+          <p className="text-sm text-muted-foreground">No rounds match these filters.</p>
         )}
         {groups.map((g) => (
           <section key={g.roundNumber} aria-label={`Round ${g.roundNumber}`}>
@@ -296,7 +296,7 @@ function GenerateDialog({
         onSuccess: (r) => {
           toast.success(
             r.created
-              ? `${r.created} deliver${r.created === 1 ? "y" : "ies"} created${r.existing ? `, ${r.existing} already existed` : ""}`
+              ? `${r.created} added${r.existing ? `, ${r.existing} already existed` : ""}`
               : "Nothing new to create. Every round already exists.",
           );
           onClose();
@@ -310,8 +310,8 @@ function GenerateDialog({
           <DialogTitle>Create rounds</DialogTitle>
           <DialogDescription>
             {activity.kind === "site"
-              ? "Adds one delivery per chosen site for each round."
-              : "Adds one delivery for each round."}{" "}
+              ? "Each round is added at every chosen site."
+              : "Adds the rounds in order."}{" "}
             Rounds that already exist are left alone, so you can run this again to add more.
           </DialogDescription>
         </DialogHeader>
@@ -362,8 +362,9 @@ function GenerateDialog({
           ) : (
             <>
               <p className="font-medium">
-                {plan.create.length} deliver{plan.create.length === 1 ? "y" : "ies"} will be created
-                {perRound > 1 ? ` (${n} rounds, ${perRound} sites each)` : ""}.
+                {perRound > 1
+                  ? `${plan.create.length} will be created: ${n} round${n === 1 ? "" : "s"} at ${perRound} sites.`
+                  : `${plan.create.length} round${plan.create.length === 1 ? "" : "s"} will be created.`}
               </p>
               {plan.existing > 0 && (
                 <p className="text-muted-foreground">
@@ -436,7 +437,7 @@ function AddDeliveryDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add a delivery</DialogTitle>
+          <DialogTitle>Add a round</DialogTitle>
           <DialogDescription>
             For one-off or ad hoc work. Use Create rounds for a regular schedule.
           </DialogDescription>
@@ -512,7 +513,7 @@ function AddDeliveryDialog({
                 },
                 {
                   onSuccess: () => {
-                    toast.success("Delivery added");
+                    toast.success("Round added");
                     reset();
                     onClose();
                   },
@@ -520,7 +521,7 @@ function AddDeliveryDialog({
               )
             }
           >
-            Add delivery
+            Add round
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -653,8 +654,8 @@ function Editor({
           label: p.label || undefined,
         });
       if (status === "completed" && files.length + pending.length === 0)
-        toast.warning("Saved as completed without proof. Add the proof of delivery when you can.");
-      else toast.success("Delivery saved");
+        toast.warning("Saved as done without proof. Add proof it happened when you can.");
+      else toast.success("Round saved");
       onClose();
     } catch {
       // The mutation hooks already showed the error.
@@ -674,7 +675,7 @@ function Editor({
         <fieldset disabled={!canEdit} className="min-w-0 space-y-5 border-0 p-0">
           {closed && (
             <p className="rounded-md border bg-muted px-3 py-2 text-sm">
-              This year is closed. This delivery can be viewed but not changed.
+              This year is closed. This round can be viewed but not changed.
             </p>
           )}
           <section className="grid gap-3 sm:grid-cols-2">
@@ -733,7 +734,7 @@ function Editor({
 
           <section className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Proof of delivery
+              Proof it happened
             </h3>
             <p className="text-sm text-muted-foreground">
               {proofWord
@@ -862,7 +863,7 @@ function Editor({
                 ))}
               </ul>
               {dirtyResults && (
-                <p className="text-xs text-muted-foreground">Results save with the delivery.</p>
+                <p className="text-xs text-muted-foreground">Results save with the round.</p>
               )}
             </section>
           )}
@@ -949,7 +950,7 @@ function Editor({
               onClick={() => setConfirm(true)}
             >
               <Trash2 className="h-4 w-4" />
-              Delete delivery
+              Delete round
             </Button>
           ) : (
             <span />
@@ -967,17 +968,17 @@ function Editor({
         </DialogFooter>
         <ConfirmDelete
           open={confirm}
-          title="Delete this delivery?"
+          title="Delete this round?"
           description={
             deleteBlock ??
-            "Use this when the delivery will no longer happen. Its indicator results are removed too, and the deletion is recorded in the audit log."
+            "Use this when the round will no longer happen. Its indicator results are removed too, and the deletion is recorded in the audit log."
           }
           onCancel={() => setConfirm(false)}
           onConfirm={() => {
             setConfirm(false);
             rm.mutate(x.id, {
               onSuccess: () => {
-                toast.success("Delivery deleted");
+                toast.success("Round deleted");
                 onClose();
               },
             });

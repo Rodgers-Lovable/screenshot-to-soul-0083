@@ -66,13 +66,13 @@ function tourSteps(): TourStep[] {
       path: "/activities",
       el: nav("activities"),
       title: "Activities",
-      body: "The workplan: objectives, outcomes and the activities under them. Open an activity to track its deliveries, and to add indicators, responsible people and sites.",
+      body: "The workplan: objectives, outcomes and the activities under them. Open an activity to track its rounds, and to add indicators, responsible people and sites.",
     },
     {
       path: "/activities",
       el: at("activities-tree"),
       title: "Objectives, outcomes and activities",
-      body: "Add and reorder items, search, and filter by kind or status. Each activity shows its status and how many deliveries are completed, such as 2 of 5. Open an activity to create its rounds, set a delivery's status and add proof.",
+      body: "Add and reorder items, search, and filter by kind or status. Each activity shows its status and how many rounds are done, such as 2 of 5. Open an activity to create its rounds, set each round's status and add proof.",
       side: "top",
     },
     {
@@ -119,7 +119,7 @@ function tourSteps(): TourStep[] {
       path: "/spending",
       el: at("spending-filters"),
       title: "Filters",
-      body: "Narrow the list by activity, delivery, line, month or flag, or search by name. A spending record can be linked to a delivery of the same activity.",
+      body: "Narrow the list by activity, round, line, month or flag, or search by name. A spending record can be linked to a round of the same activity.",
       side: "bottom",
     },
     {

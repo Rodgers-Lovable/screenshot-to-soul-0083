@@ -13,9 +13,9 @@ import type {
 
 export const DELIVERY_STATUSES: DeliveryStatus[] = ["planned", "in_progress", "completed"];
 export const DELIVERY_STATUS_LABEL: Record<DeliveryStatus, string> = {
-  planned: "Planned",
-  in_progress: "In progress",
-  completed: "Completed",
+  planned: "Not started",
+  in_progress: "Ongoing",
+  completed: "Done",
 };
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
@@ -198,11 +198,11 @@ export function validateDelivery(v: {
   plannedDate?: string;
   actualDate?: string;
 }): string | null {
-  if (!DELIVERY_STATUSES.includes(v.status)) return "Choose planned, in progress or completed.";
+  if (!DELIVERY_STATUSES.includes(v.status)) return "Choose not started, ongoing or done.";
   for (const d of [v.plannedDate, v.actualDate])
     if (d && !isoDate.test(d)) return "Enter dates as year, month and day.";
   if (v.status === "completed" && !v.actualDate)
-    return "Add the date it took place before marking it completed.";
+    return "Add the date it took place before marking it done.";
   return null;
 }
 
@@ -212,9 +212,9 @@ export function deliveryDeleteBlock(o: {
   proofFiles: number;
 }): string | null {
   if (o.linkedSpending)
-    return `This delivery has ${o.linkedSpending} spending record${o.linkedSpending === 1 ? "" : "s"} linked to it. Unlink ${o.linkedSpending === 1 ? "it" : "them"} before deleting the delivery.`;
+    return `This round has ${o.linkedSpending} spending record${o.linkedSpending === 1 ? "" : "s"} linked to it. Unlink ${o.linkedSpending === 1 ? "it" : "them"} before deleting the round.`;
   if (o.proofFiles)
-    return `This delivery has ${o.proofFiles} proof file${o.proofFiles === 1 ? "" : "s"}. Remove ${o.proofFiles === 1 ? "it" : "them"} before deleting the delivery.`;
+    return `This round has ${o.proofFiles} proof file${o.proofFiles === 1 ? "" : "s"}. Remove ${o.proofFiles === 1 ? "it" : "them"} before deleting the round.`;
   return null;
 }
 
@@ -223,20 +223,20 @@ export function parentDeleteBlock(
   deliveries: number,
 ): string | null {
   if (!deliveries) return null;
-  const n = deliveries === 1 ? "1 delivery" : `${deliveries} deliveries`;
+  const n = deliveries === 1 ? "1 round" : `${deliveries} rounds`;
   return what === "activity"
-    ? `This activity has ${n}. Delete the deliveries before deleting the activity.`
-    : `This ${what} has activities with ${n}. Delete the deliveries before deleting the ${what}.`;
+    ? `This activity has ${n}. Delete the rounds before deleting the activity.`
+    : `This ${what} has activities with ${n}. Delete the rounds before deleting the ${what}.`;
 }
 
 export const linkedLineMoveBlock = (n: number) =>
-  `${n} spending record${n === 1 ? " of this line is" : "s of this line are"} linked to deliveries. Unlink ${n === 1 ? "it" : "them"} before moving the line to another activity.`;
+  `${n} spending record${n === 1 ? " of this line is" : "s of this line are"} linked to rounds. Unlink ${n === 1 ? "it" : "them"} before moving the line to another activity.`;
 export const KIND_CHANGE_BLOCK =
-  "This activity has deliveries, so it cannot change between general and site.";
+  "This activity has rounds, so it cannot change between general and site.";
 export const siteRemovalBlock = (siteName: string) =>
-  `${siteName} has deliveries on this activity. Delete them before removing the site.`;
+  `${siteName} has rounds on this activity. Delete them before removing the site.`;
 export const INDICATOR_DELETE_BLOCK =
-  "This indicator has recorded results. Delete the deliveries or clear the results first.";
+  "This indicator has recorded results. Delete the rounds or clear the results first.";
 
 /** Why a spending record cannot link to a delivery, else null. */
 export function validateEventLink(
@@ -244,11 +244,11 @@ export function validateEventLink(
   delivery: Pick<Delivery, "id" | "activityId"> | undefined,
   event: Pick<BudgetEvent, "deliveryId">,
 ): string | null {
-  if (!line || !delivery) return "Delivery not found.";
+  if (!line || !delivery) return "Round not found.";
   if (line.activityId !== delivery.activityId)
-    return "A spending record can only link to a delivery of the same activity.";
+    return "A spending record can only link to a round of the same activity.";
   if (event.deliveryId && event.deliveryId !== delivery.id)
-    return "That spending record is already linked to another delivery. Unlink it first.";
+    return "That spending record is already linked to another round. Unlink it first.";
   return null;
 }
 

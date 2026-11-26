@@ -149,7 +149,7 @@ function ActivitiesPage() {
     if (dd.t === "del-objective") {
       const outs = d.outcomes.filter((o) => o.objectiveId === dd.item.id);
       const acts = d.activities.filter((a) => outs.some((o) => o.id === a.outcomeId));
-      return `This deletes "${dd.item.title}" with its ${outs.length} outcome(s) and ${acts.length} activity(ies), including their indicators, responsible people and sites. Anything with deliveries cannot be deleted until its deliveries are.`;
+      return `This deletes "${dd.item.title}" with its ${outs.length} outcome(s) and ${acts.length} activity(ies), including their indicators, responsible people and sites. Anything with rounds cannot be deleted until its rounds are.`;
     }
     if (dd.t === "del-outcome") {
       const acts = d.activities.filter((a) => a.outcomeId === dd.item.id);

@@ -277,13 +277,13 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
             <Input id="location" {...form.register("location")} />
           </div>
           <div className="space-y-1 sm:col-span-2">
-            <Label>Linked delivery</Label>
+            <Label>For round</Label>
             <Select value={deliveryId} onValueChange={setDeliveryId}>
-              <SelectTrigger aria-label="Linked delivery">
+              <SelectTrigger aria-label="For round">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_DELIVERY}>Not linked to a delivery</SelectItem>
+                <SelectItem value={NO_DELIVERY}>Not tied to a round</SelectItem>
                 {choices.map((x) => (
                   <SelectItem key={x.id} value={x.id}>
                     {roundText(x)}
@@ -293,8 +293,8 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Optional. Only deliveries of this line&apos;s activity are listed. Linking does not
-              change any amounts.
+              Optional. Only rounds of this line&apos;s activity are listed. Linking does not change
+              any amounts.
             </p>
           </div>
           <div className="space-y-1 sm:col-span-2">

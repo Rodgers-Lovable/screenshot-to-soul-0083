@@ -318,7 +318,7 @@ function IndicatorsCard({
         <CardTitle className="text-base">Indicators</CardTitle>
         <CardDescription>
           What to measure. Add several at once, separated by commas. A target is optional. Results
-          are entered on each delivery and added up here.
+          are entered on each round and added up here.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -252,8 +252,8 @@ describe("delete checks", () => {
   });
   it("blocks deleting a parent that holds deliveries", () => {
     expect(parentDeleteBlock("activity", 0)).toBeNull();
-    expect(parentDeleteBlock("activity", 1)).toMatch(/has 1 delivery\./);
-    expect(parentDeleteBlock("outcome", 3)).toMatch(/activities with 3 deliveries/);
+    expect(parentDeleteBlock("activity", 1)).toMatch(/has 1 round\./);
+    expect(parentDeleteBlock("outcome", 3)).toMatch(/activities with 3 rounds/);
     expect(parentDeleteBlock("objective", 2)).toMatch(/before deleting the objective/);
   });
 });
