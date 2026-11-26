@@ -604,6 +604,25 @@ function SitesCard({
             The study has no sites yet. A study admin adds them under Settings, Sites.
           </p>
         )}
+        {list.length > 1 && (
+          <div className="flex items-center gap-2 border-b pb-2 text-sm">
+            <Checkbox
+              id="site-all"
+              disabled={!canEdit}
+              checked={
+                list.every((s) => pick.has(s.id))
+                  ? true
+                  : list.some((s) => pick.has(s.id))
+                    ? "indeterminate"
+                    : false
+              }
+              onCheckedChange={(c) => setPick(new Set(c === true ? list.map((s) => s.id) : []))}
+            />
+            <Label htmlFor="site-all" className="font-medium">
+              Select all
+            </Label>
+          </div>
+        )}
         <ul className="grid gap-2 sm:grid-cols-2">
           {list.map((s) => (
             <li key={s.id} className="flex items-center gap-2 text-sm">
