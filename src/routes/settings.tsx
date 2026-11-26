@@ -215,7 +215,7 @@ function PeriodForm() {
             {!readOnly && problem && v.name && v.startDate && v.endDate && (
               <p className="text-sm text-destructive">{problem}</p>
             )}
-            <Button onClick={save} disabled={invalid || upd.isPending}>
+            <Button onClick={save} loading={upd.isPending} disabled={invalid}>
               Save year
             </Button>
           </fieldset>
@@ -396,7 +396,8 @@ function SitesPanel() {
           />
           <Button
             size="sm"
-            disabled={!en.trim() || rename.isPending}
+            loading={rename.isPending}
+            disabled={!en.trim()}
             onClick={() =>
               rename.mutate({ id: s.id, name: en }, { onSuccess: () => setEditing(null) })
             }
@@ -497,7 +498,7 @@ function SitesPanel() {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
-            <Button type="submit" disabled={!name.trim() || add.isPending}>
+            <Button type="submit" loading={add.isPending} disabled={!name.trim()}>
               <Plus className="h-4 w-4" />
               Add
             </Button>
@@ -732,7 +733,7 @@ function ImportPanel() {
           </div>
         ))}
         {rows.length > 0 && (
-          <Button onClick={confirm} disabled={imp.isPending || !canEdit || !activityId}>
+          <Button onClick={confirm} loading={imp.isPending} disabled={!canEdit || !activityId}>
             Import {rows.length} line(s)
           </Button>
         )}

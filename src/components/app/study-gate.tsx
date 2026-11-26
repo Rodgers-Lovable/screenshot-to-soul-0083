@@ -125,7 +125,7 @@ export function CreateStudyForm({
           onChange={(e) => setName(e.target.value)}
         />
       </div>
-      <Button type="submit" className="w-full" disabled={create.isPending || !name.trim()}>
+      <Button type="submit" className="w-full" loading={create.isPending} disabled={!name.trim()}>
         Create study
       </Button>
     </form>

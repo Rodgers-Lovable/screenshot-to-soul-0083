@@ -116,7 +116,7 @@ export function TeamPanel() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
-            <Button type="submit" disabled={addM.isPending}>
+            <Button type="submit" loading={addM.isPending}>
               Add
             </Button>
           </form>

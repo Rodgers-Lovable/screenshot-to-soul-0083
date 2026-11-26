@@ -168,7 +168,7 @@ function CodeTitleForm({
         />
       </div>
       <DialogFooter>
-        <Button type="submit" disabled={!title.trim() || pending}>
+        <Button type="submit" loading={pending} disabled={!title.trim()}>
           Save
         </Button>
       </DialogFooter>
@@ -324,7 +324,7 @@ export function ActivityDialog({
         </DialogHeader>
         <ActivityFields value={v} onChange={setV} idPrefix="new-activity" />
         <DialogFooter>
-          <Button disabled={!activityFormValid(v) || pending} onClick={() => onSave(v)}>
+          <Button loading={pending} disabled={!activityFormValid(v)} onClick={() => onSave(v)}>
             Add activity
           </Button>
         </DialogFooter>

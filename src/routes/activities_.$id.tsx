@@ -220,7 +220,11 @@ function DetailsCard({
             <ActivityFields value={v} onChange={setV} idPrefix="act" />
           </fieldset>
           {canEdit && (
-            <Button type="submit" disabled={!dirty || !activityFormValid(v) || upd.isPending}>
+            <Button
+              type="submit"
+              loading={upd.isPending}
+              disabled={!dirty || !activityFormValid(v)}
+            >
               Save details
             </Button>
           )}
@@ -313,7 +317,8 @@ function IndicatorsCard({
                   />
                   <Button
                     size="sm"
-                    disabled={!en.trim() || upd.isPending}
+                    loading={upd.isPending}
+                    disabled={!en.trim()}
                     onClick={() =>
                       upd.mutate(
                         {
@@ -392,7 +397,7 @@ function IndicatorsCard({
                 value={multi ? "" : target}
                 onChange={(e) => setTarget(e.target.value)}
               />
-              <Button type="submit" disabled={!parsed.add.length || add.isPending}>
+              <Button type="submit" loading={add.isPending} disabled={!parsed.add.length}>
                 <Plus className="h-4 w-4" />
                 Add
               </Button>
@@ -538,7 +543,7 @@ function ResponsibleCard({
                   ))}
                 </SelectContent>
               </Select>
-              <Button type="submit" disabled={!parsed.add.length || add.isPending}>
+              <Button type="submit" loading={add.isPending} disabled={!parsed.add.length}>
                 <Plus className="h-4 w-4" />
                 Add
               </Button>
@@ -648,7 +653,8 @@ function SitesCard({
         </ul>
         {canEdit && list.length > 0 && (
           <Button
-            disabled={!dirty || set.isPending}
+            loading={set.isPending}
+            disabled={!dirty}
             onClick={() =>
               set.mutate(
                 { activityId, siteIds: [...pick] },

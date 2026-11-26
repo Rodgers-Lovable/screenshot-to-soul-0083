@@ -62,6 +62,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const [drag, setDrag] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState<"save" | "done" | "cancel" | "reopen" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<FormIn, unknown, FormOut>({
@@ -133,6 +134,15 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
     const n = pending.length;
     setPending([]);
     return n;
+  }
+
+  async function run(which: NonNullable<typeof busy>, work: () => Promise<void>) {
+    setBusy(which);
+    try {
+      await work();
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function save(status: EventStatus, extraNotes?: string) {
@@ -350,13 +360,20 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
 
       <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
         {ev.status !== "planned" && (
-          <Button variant="outline" onClick={reopen}>
+          <Button
+            variant="outline"
+            loading={busy === "reopen"}
+            disabled={!!busy}
+            onClick={() => run("reopen", reopen)}
+          >
             Reopen
           </Button>
         )}
         {ev.status !== "cancelled" && (
           <Button
             variant="outline"
+            loading={busy === "cancel"}
+            disabled={!!busy}
             onClick={() => {
               setReason("");
               setCancelOpen(true);
@@ -365,10 +382,19 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
             Mark cancelled
           </Button>
         )}
-        <Button variant="secondary" onClick={() => save(ev.status === "done" ? "done" : "planned")}>
+        <Button
+          variant="secondary"
+          loading={busy === "save"}
+          disabled={!!busy}
+          onClick={() => run("save", () => save(ev.status === "done" ? "done" : "planned"))}
+        >
           Save without completing
         </Button>
-        <Button onClick={() => save("done")} disabled={update.isPending}>
+        <Button
+          loading={busy === "done"}
+          disabled={!!busy}
+          onClick={() => run("done", () => save("done"))}
+        >
           Mark done
         </Button>
       </div>
@@ -389,7 +415,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
               disabled={!reason.trim()}
               onClick={() => {
                 setCancelOpen(false);
-                void save("cancelled", reason.trim());
+                void run("cancel", () => save("cancelled", reason.trim()));
               }}
             >
               Mark cancelled
