@@ -110,6 +110,46 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
   const lock = canEdit ? undefined : CLOSED_HINT;
   const siteIdsUsed = [...new Set(mine.map((x) => x.siteId).filter((x): x is string => !!x))];
 
+  const row = (x: Delivery, title: string) => {
+    const proof = proofCount(x.id);
+    const spend = linked(x.id).length;
+    return (
+      <li key={x.id}>
+        <button
+          type="button"
+          onClick={() => setOpen(x.id)}
+          className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left hover:bg-muted/40"
+        >
+          <span className="min-w-0 flex-1 basis-40 break-words font-medium">{title}</span>
+          <DeliveryStatusChip status={x.status} />
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {x.status === "completed"
+              ? `Done ${x.actualDate ?? ""}`
+              : x.plannedDate
+                ? `Planned ${x.plannedDate}`
+                : "No date"}
+          </span>
+          <span
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+            title={`${proof} proof file${proof === 1 ? "" : "s"}`}
+          >
+            <Paperclip className="h-3 w-3" aria-hidden />
+            {proof}
+            <span className="sr-only">proof files</span>
+          </span>
+          <span
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+            title={`${spend} linked spending record${spend === 1 ? "" : "s"}`}
+          >
+            <Link2 className="h-3 w-3" aria-hidden />
+            {spend}
+            <span className="sr-only">linked spending records</span>
+          </span>
+          <Flags flags={deliveryFlags(x, proof, today)} />
+        </button>
+      </li>
+    );
+  };
   return (
     <Card data-tour="deliveries">
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
@@ -187,58 +227,23 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
         {!!mine.length && !shown.length && (
           <p className="text-sm text-muted-foreground">No rounds match these filters.</p>
         )}
-        {groups.map((g) => (
-          <section key={g.roundNumber} aria-label={`Round ${g.roundNumber}`}>
-            <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Round {g.roundNumber}
-              {g.label ? `: ${g.label}` : ""}
-            </h3>
-            <ul className="divide-y rounded-md border text-sm">
-              {g.items.map((x) => {
-                const proof = proofCount(x.id);
-                const spend = linked(x.id).length;
-                return (
-                  <li key={x.id}>
-                    <button
-                      type="button"
-                      onClick={() => setOpen(x.id)}
-                      className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left hover:bg-muted/40"
-                    >
-                      <span className="min-w-0 flex-1 basis-40 break-words font-medium">
-                        {x.siteId ? siteName(x.siteId) : "No site"}
-                      </span>
-                      <DeliveryStatusChip status={x.status} />
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {x.status === "completed"
-                          ? `Done ${x.actualDate ?? ""}`
-                          : x.plannedDate
-                            ? `Planned ${x.plannedDate}`
-                            : "No date"}
-                      </span>
-                      <span
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-                        title={`${proof} proof file${proof === 1 ? "" : "s"}`}
-                      >
-                        <Paperclip className="h-3 w-3" aria-hidden />
-                        {proof}
-                        <span className="sr-only">proof files</span>
-                      </span>
-                      <span
-                        className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-                        title={`${spend} linked spending record${spend === 1 ? "" : "s"}`}
-                      >
-                        <Link2 className="h-3 w-3" aria-hidden />
-                        {spend}
-                        <span className="sr-only">linked spending records</span>
-                      </span>
-                      <Flags flags={deliveryFlags(x, proof, today)} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        ))}
+        {activity.kind === "general" && shown.length > 0 && (
+          <ul className="divide-y rounded-md border text-sm">
+            {groups.flatMap((g) => g.items).map((x) => row(x, roundText(x)))}
+          </ul>
+        )}
+        {activity.kind === "site" &&
+          groups.map((g) => (
+            <section key={g.roundNumber} aria-label={`Round ${g.roundNumber}`}>
+              <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Round {g.roundNumber}
+                {g.label ? `: ${g.label}` : ""}
+              </h3>
+              <ul className="divide-y rounded-md border text-sm">
+                {g.items.map((x) => row(x, x.siteId ? siteName(x.siteId) : "No site"))}
+              </ul>
+            </section>
+          ))}
       </CardContent>
       <GenerateDialog open={gen} onClose={() => setGen(false)} activity={activity} />
       <AddDeliveryDialog open={adding} onClose={() => setAdding(false)} activity={activity} />
