@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import {
   useBudgetData,
+  useDeliveries,
   useAddIndicators,
   useAddResponsibles,
   useRemoveIndicator,
@@ -30,10 +31,17 @@ import {
   useUpdateResponsible,
   useWorkplan,
 } from "@/data/hooks";
-import type { ActivityIndicator, ActivityResponsible } from "@/lib/types";
+import type { ActivityIndicator, ActivityResponsible, DeliveryResult } from "@/lib/types";
 import { CLOSED_HINT, useYear } from "@/components/app/active-year-context";
 import { useActiveStudy } from "@/components/app/active-study-context";
-import { ActivityFields, ConfirmDelete, KindChip, PlannedChip } from "@/components/app/workplan-ui";
+import {
+  ActivityFields,
+  ConfirmDelete,
+  DeliveryStatusChip,
+  KindChip,
+} from "@/components/app/workplan-ui";
+import { DeliveriesCard } from "@/components/app/delivery-ui";
+import { activityChip, indicatorTotals } from "@/lib/deliveries";
 import {
   activityFormValid,
   multiAddMessage,
@@ -63,6 +71,7 @@ export const Route = createFileRoute("/activities_/$id")({
 function ActivityPage() {
   const { id } = Route.useParams();
   const wp = useWorkplan();
+  const dl = useDeliveries();
   const { canEdit, closed } = useYear();
   const d = wp.data;
   const activity = d?.activities.find((a) => a.id === id);
@@ -77,7 +86,7 @@ function ActivityPage() {
   );
   if (wp.isError)
     return <p className="text-sm text-destructive">Could not load: {wp.error.message}</p>;
-  if (!d) return null;
+  if (!d || !dl.data) return null;
   if (!activity)
     return (
       <div className="space-y-2">
@@ -104,7 +113,9 @@ function ActivityPage() {
             <span className="font-mono text-sm text-muted-foreground">{activity.code}</span>
           )}
           <KindChip kind={activity.kind} />
-          <PlannedChip />
+          <DeliveryStatusChip
+            {...activityChip(dl.data.deliveries.filter((x) => x.activityId === id))}
+          />
         </div>
         <h1 className="mt-1 text-xl font-semibold tracking-tight">{activity.title}</h1>
         {closed && <p className="mt-1 text-sm text-muted-foreground">{CLOSED_HINT}</p>}
@@ -117,8 +128,15 @@ function ActivityPage() {
         siteCount={siteIds.length}
         canEdit={canEdit}
       />
+      <DeliveriesCard activity={activity} />
       <BudgetCard activityId={id} canEdit={canEdit} />
-      <IndicatorsCard activityId={id} rows={indicators} canEdit={canEdit} />
+      <IndicatorsCard
+        activityId={id}
+        rows={indicators}
+        canEdit={canEdit}
+        results={dl.data.results}
+        deliveryIds={dl.data.deliveries.filter((x) => x.activityId === id).map((x) => x.id)}
+      />
       <ResponsibleCard activityId={id} rows={responsibles} canEdit={canEdit} />
       <SitesCard
         activityId={id}
@@ -248,11 +266,21 @@ function IndicatorsCard({
   activityId,
   rows,
   canEdit,
+  results,
+  deliveryIds,
 }: {
   activityId: string;
   rows: ActivityIndicator[];
   canEdit: boolean;
+  results: DeliveryResult[];
+  deliveryIds: string[];
 }) {
+  const totals = new Map(
+    indicatorTotals(
+      rows,
+      results.filter((r) => deliveryIds.includes(r.deliveryId)),
+    ).map((t) => [t.indicator.id, t]),
+  );
   const add = useAddIndicators();
   const upd = useUpdateIndicator();
   const rm = useRemoveIndicator();
@@ -289,7 +317,8 @@ function IndicatorsCard({
       <CardHeader>
         <CardTitle className="text-base">Indicators</CardTitle>
         <CardDescription>
-          What to measure. Add several at once, separated by commas. A target is optional.
+          What to measure. Add several at once, separated by commas. A target is optional. Results
+          are entered on each delivery and added up here.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -338,8 +367,12 @@ function IndicatorsCard({
               ) : (
                 <>
                   <span className="mr-auto min-w-0 break-words">{r.name}</span>
-                  <span className="text-muted-foreground">
-                    {r.target === undefined ? "No target" : `Target ${r.target}`}
+                  <span className="text-muted-foreground tabular-nums">
+                    {totals.get(r.id)?.recorded
+                      ? `${totals.get(r.id)?.total} recorded${r.target === undefined ? "" : ` of ${r.target} (${totals.get(r.id)?.percent}%)`}`
+                      : r.target === undefined
+                        ? "No target"
+                        : `Target ${r.target}`}
                   </span>
                   {canEdit && (
                     <>

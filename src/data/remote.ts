@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type {
   ActivitySite,
   Attachment,
+  DeliveryResult,
   AuditEntry,
   BudgetPeriod,
   Study,
@@ -67,10 +68,24 @@ const COLS = {
     "actualUnitCostCents",
     "actualDuration",
     "notes",
+    "deliveryId",
   ],
+  deliveries: [
+    "id",
+    "activityId",
+    "siteId",
+    "roundNumber",
+    "roundLabel",
+    "plannedDate",
+    "actualDate",
+    "status",
+    "notes",
+  ],
+  results: ["deliveryId", "indicatorId", "value", "notes"],
   attachments: [
     "id",
     "eventId",
+    "deliveryId",
     "fileName",
     "fileUrl",
     "mimeType",
@@ -90,6 +105,8 @@ const TABLE = {
   responsibles: "activity_responsibles",
   activitySites: "activity_sites",
   lines: "budget_lines",
+  deliveries: "deliveries",
+  results: "delivery_indicator_results",
   events: "budget_events",
   attachments: "attachments",
   audit: "audit_log",
@@ -171,6 +188,7 @@ export function loadRemote(study: string, period: string | null): Promise<StoreD
           period: d.period?.name ?? null,
           activities: d.activities.length,
           lines: d.lines.length,
+          deliveries: d.deliveries.length,
           events: d.events.length,
           attachments: d.attachments.length,
         }),
@@ -188,7 +206,12 @@ async function doLoad(study: string, periodId: string | null): Promise<StoreData
     objectives: [],
     outcomes: [],
     activities: [],
+    sites: [],
+    activitySites: [],
+    indicators: [],
     lines: [],
+    deliveries: [],
+    results: [],
     events: [],
     attachments: [],
     audit: [],
@@ -209,20 +232,52 @@ async function doLoad(study: string, periodId: string | null): Promise<StoreData
     col: "outcome_id",
     ids: ids(outcomes),
   });
-  const lines = await fetchAll<StoreData["lines"][number]>(TABLE.lines, study, {
-    col: "activity_id",
-    ids: ids(activities),
-  });
-  const events = await fetchAll<StoreData["events"][number]>(TABLE.events, study, {
-    col: "line_id",
-    ids: ids(lines),
-  });
-  const attachments = await fetchAll<Attachment>(TABLE.attachments, study, {
-    col: "event_id",
-    ids: ids(events),
-  });
+  const actIds = ids(activities);
+  const [lines, deliveries, indicators, activitySites, sites] = await Promise.all([
+    fetchAll<StoreData["lines"][number]>(TABLE.lines, study, { col: "activity_id", ids: actIds }),
+    fetchAll<StoreData["deliveries"][number]>(TABLE.deliveries, study, {
+      col: "activity_id",
+      ids: actIds,
+    }),
+    fetchAll<StoreData["indicators"][number]>(TABLE.indicators, study, {
+      col: "activity_id",
+      ids: actIds,
+    }),
+    fetchAll<ActivitySite>(TABLE.activitySites, study, {
+      col: "activity_id",
+      ids: actIds,
+      order: "activity_id",
+    }),
+    actIds.length ? fetchAll<StoreData["sites"][number]>(TABLE.sites, study) : [],
+  ]);
+  const [events, results] = await Promise.all([
+    fetchAll<StoreData["events"][number]>(TABLE.events, study, { col: "line_id", ids: ids(lines) }),
+    fetchAll<DeliveryResult>(TABLE.results, study, {
+      col: "delivery_id",
+      ids: ids(deliveries),
+      order: "delivery_id",
+    }),
+  ]);
+  const [receipts, proof] = await Promise.all([
+    fetchAll<Attachment>(TABLE.attachments, study, { col: "event_id", ids: ids(events) }),
+    fetchAll<Attachment>(TABLE.attachments, study, { col: "delivery_id", ids: ids(deliveries) }),
+  ]);
   if (!activities.length) log.info("year has no activities yet");
-  return { period, objectives, outcomes, activities, lines, events, attachments, audit: [] };
+  return {
+    period,
+    objectives,
+    outcomes,
+    activities,
+    sites,
+    activitySites,
+    indicators,
+    lines,
+    deliveries,
+    results,
+    events,
+    attachments: [...receipts, ...proof],
+    audit: [],
+  };
 }
 
 type RunResult = PromiseLike<{ error: { message: string } | null }>;
@@ -254,10 +309,13 @@ const removedIds = <K extends string>(
   const keep = new Set(after[k].map((r) => r.id));
   return before[k].filter((r) => !keep.has(r.id)).map((r) => r.id);
 };
-const upsertRows = async (table: string, rows: Obj[]) => {
+const upsertRows = async (table: string, rows: Obj[], onConflict?: string) => {
   for (let i = 0; i < rows.length; i += 500)
-    await run(from(table).upsert(rows.slice(i, i + 500) as never));
+    await run(
+      from(table).upsert(rows.slice(i, i + 500) as never, onConflict ? { onConflict } : undefined),
+    );
 };
+const resultKey = (r: DeliveryResult) => `${r.deliveryId}:${r.indicatorId}`;
 const deleteIds = async (table: string, studyId: string, list: string[]) => {
   for (let i = 0; i < list.length; i += 200)
     await run(
@@ -274,18 +332,48 @@ const insertAudit = async (list: AuditEntry[], studyId: string) => {
   return rows.length;
 };
 
-/** Writes the rows that changed. Years are never written here; they go through functions. */
+/**
+ * Writes the rows that changed. Years are never written here; they go through functions.
+ * Parents are written before children that point at them, and deleted after them.
+ */
 export async function syncRemote(before: StoreData, after: StoreData, studyId: string) {
   const written: Record<string, number> = {};
-  for (const k of ["lines", "events", "attachments"] as const) {
+  const upsert = async (k: "lines" | "deliveries" | "events" | "attachments") => {
     const rows = diff(before, after, k, COLS[k], studyId);
     if (rows.length) written[`${k} upserted`] = rows.length;
     await upsertRows(TABLE[k], rows);
-  }
+  };
+  await upsert("lines");
+  await upsert("deliveries");
+
+  const had = new Map(
+    before.results.map((r) => [resultKey(r), JSON.stringify(toRow(r, COLS.results))]),
+  );
+  const resultRows = after.results
+    .map((r) => toRow(r, COLS.results))
+    .filter((r) => had.get(`${r.delivery_id}:${r.indicator_id}`) !== JSON.stringify(r))
+    .map((r) => ({ ...r, study_id: studyId }));
+  if (resultRows.length) written["results upserted"] = resultRows.length;
+  await upsertRows(TABLE.results, resultRows, "delivery_id,indicator_id");
+
+  await upsert("events");
+  await upsert("attachments");
+
+  const keep = new Set(after.results.map(resultKey));
+  const goneResults = before.results.filter((r) => !keep.has(resultKey(r)));
+  if (goneResults.length) written["results deleted"] = goneResults.length;
+  for (const r of goneResults)
+    await run(
+      from(TABLE.results)
+        .delete()
+        .eq("study_id" as never, studyId)
+        .eq("delivery_id" as never, r.deliveryId)
+        .eq("indicator_id" as never, r.indicatorId),
+    );
   const gone = before.attachments.filter(
     (a) => !after.attachments.some((x) => x.id === a.id),
   ) as Attachment[];
-  for (const k of ["attachments", "events", "lines"] as const) {
+  for (const k of ["attachments", "events", "deliveries", "lines"] as const) {
     const list = removedIds(before, after, k);
     if (list.length) written[`${k} deleted`] = list.length;
     await deleteIds(TABLE[k], studyId, list);
@@ -418,8 +506,9 @@ export async function currentUserLabel() {
   return data.session?.user.email ?? "unknown";
 }
 
-export async function uploadEvidence(study: string, eventId: string, file: File) {
-  const path = `${study}/${eventId}/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
+/** Folder is the event id for a receipt, or `deliveries/<id>` for proof of delivery. */
+export async function uploadEvidence(study: string, folder: string, file: File) {
+  const path = `${study}/${folder}/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]+/g, "_")}`;
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { contentType: file.type || undefined });

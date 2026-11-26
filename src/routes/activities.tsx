@@ -33,11 +33,21 @@ import {
   useRemoveActivity,
   useRemoveObjective,
   useRemoveOutcome,
+  useDeliveries,
   useUpdateObjective,
   useUpdateOutcome,
   useWorkplan,
 } from "@/data/hooks";
-import type { Activity, ActivityKind, Objective, Outcome } from "@/lib/types";
+import type { Activity, ActivityKind, DeliveryStatus, Objective, Outcome } from "@/lib/types";
+import {
+  activityStatus,
+  byActivity,
+  DELIVERY_STATUS_LABEL,
+  DELIVERY_STATUSES,
+  deliveryProgress,
+  filterTreeByStatus,
+  progressText,
+} from "@/lib/deliveries";
 import { buildTree, duplicateCodes, filterTree, frequencyText, isDuplicate } from "@/lib/workplan";
 import { PageHeader } from "@/components/app/shell";
 import { CLOSED_HINT, useYear } from "@/components/app/active-year-context";
@@ -46,8 +56,8 @@ import {
   CodeTitleDialog,
   ConfirmDelete,
   DuplicateCodeWarning,
+  DeliveryStatusChip,
   KindChip,
-  PlannedChip,
 } from "@/components/app/workplan-ui";
 
 export const Route = createFileRoute("/activities")({
@@ -80,7 +90,9 @@ type Dlg =
 function ActivitiesPage() {
   const wp = useWorkplan();
   const { year, canEdit, closed } = useYear();
+  const dl = useDeliveries();
   const [kind, setKind] = useState<ActivityKind | "all">("all");
+  const [status, setStatus] = useState<DeliveryStatus | "all">("all");
   const [search, setSearch] = useState("");
   const [dlg, setDlg] = useState<Dlg>(null);
 
@@ -98,7 +110,15 @@ function ActivitiesPage() {
 
   const d = wp.data;
   const tree = useMemo(() => (d ? buildTree(d.objectives, d.outcomes, d.activities) : []), [d]);
-  const shown = useMemo(() => filterTree(tree, { kind, search }), [tree, kind, search]);
+  const deliveriesBy = useMemo(() => byActivity(dl.data?.deliveries ?? []), [dl.data]);
+  const statusOf = (id: string) => activityStatus(deliveriesBy.get(id) ?? []);
+  const shown = useMemo(
+    () =>
+      filterTreeByStatus(filterTree(tree, { kind, search }), status, (id) =>
+        activityStatus(deliveriesBy.get(id) ?? []),
+      ),
+    [tree, kind, search, status, deliveriesBy],
+  );
   const siteName = useMemo(() => new Map((d?.sites ?? []).map((s) => [s.id, s.name])), [d]);
   const sitesOf = (a: Activity) =>
     (d?.activitySites ?? [])
@@ -112,9 +132,9 @@ function ActivitiesPage() {
     return (
       <p className="text-sm text-destructive">Could not load the workplan: {wp.error.message}</p>
     );
-  if (!d) return null;
+  if (!d || !dl.data) return null;
 
-  const filtering = kind !== "all" || search.trim() !== "";
+  const filtering = kind !== "all" || status !== "all" || search.trim() !== "";
   const done = (msg: string) => ({
     onSuccess: () => {
       toast.success(msg);
@@ -129,7 +149,7 @@ function ActivitiesPage() {
     if (dd.t === "del-objective") {
       const outs = d.outcomes.filter((o) => o.objectiveId === dd.item.id);
       const acts = d.activities.filter((a) => outs.some((o) => o.id === a.outcomeId));
-      return `This deletes "${dd.item.title}" with its ${outs.length} outcome(s) and ${acts.length} activity(ies), including their indicators, responsible people and sites.`;
+      return `This deletes "${dd.item.title}" with its ${outs.length} outcome(s) and ${acts.length} activity(ies), including their indicators, responsible people and sites. Anything with deliveries cannot be deleted until its deliveries are.`;
     }
     if (dd.t === "del-outcome") {
       const acts = d.activities.filter((a) => a.outcomeId === dd.item.id);
@@ -176,6 +196,22 @@ function ActivitiesPage() {
           <ToggleGroupItem value="all">All</ToggleGroupItem>
           <ToggleGroupItem value="general">General</ToggleGroupItem>
           <ToggleGroupItem value="site">Site</ToggleGroupItem>
+        </ToggleGroup>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={status}
+          onValueChange={(v) => v && setStatus(v as DeliveryStatus | "all")}
+          aria-label="Filter by status"
+          className="flex-wrap"
+        >
+          <ToggleGroupItem value="all">Any status</ToggleGroupItem>
+          {DELIVERY_STATUSES.map((st) => (
+            <ToggleGroupItem key={st} value={st}>
+              {DELIVERY_STATUS_LABEL[st]}
+            </ToggleGroupItem>
+          ))}
         </ToggleGroup>
       </div>
 
@@ -320,7 +356,12 @@ function ActivitiesPage() {
                                       {a.title}
                                     </Link>
                                     <KindChip kind={a.kind} />
-                                    <PlannedChip />
+                                    <DeliveryStatusChip
+                                      status={statusOf(a.id)}
+                                      progress={progressText(
+                                        deliveryProgress(deliveriesBy.get(a.id) ?? []),
+                                      )}
+                                    />
                                   </div>
                                   <dl className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-muted-foreground sm:grid-cols-2">
                                     {a.kind === "site" && (

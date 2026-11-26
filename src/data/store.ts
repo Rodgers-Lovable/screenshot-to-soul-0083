@@ -1,4 +1,6 @@
 import type {
+  ActivityIndicator,
+  ActivitySite,
   Attachment,
   AuditEntry,
   BudgetEvent,
@@ -7,6 +9,9 @@ import type {
   Objective,
   Outcome,
   Activity,
+  Delivery,
+  DeliveryResult,
+  Site,
 } from "@/lib/types";
 
 export interface StoreData {
@@ -15,7 +20,13 @@ export interface StoreData {
   objectives: Objective[];
   outcomes: Outcome[];
   activities: Activity[];
+  /** Read only here, so deliveries can be checked against sites and indicators. */
+  sites: Site[];
+  activitySites: ActivitySite[];
+  indicators: ActivityIndicator[];
   lines: BudgetLine[];
+  deliveries: Delivery[];
+  results: DeliveryResult[];
   events: BudgetEvent[];
   attachments: Attachment[];
   audit: AuditEntry[];

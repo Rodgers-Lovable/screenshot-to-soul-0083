@@ -4,6 +4,7 @@ import {
   adminRepo,
   attachmentRepo,
   auditRepo,
+  deliveryRepo,
   eventRepo,
   lineRepo,
   periodRepo,
@@ -24,6 +25,8 @@ export const useEvents = () =>
   useQuery({ queryKey: key("events"), queryFn: () => eventRepo.list() });
 export const useAttachments = () =>
   useQuery({ queryKey: key("attachments"), queryFn: () => attachmentRepo.list() });
+export const useDeliveries = () =>
+  useQuery({ queryKey: key("deliveries"), queryFn: () => deliveryRepo.list() });
 export const useWorkplan = () =>
   useQuery({ queryKey: key("workplan"), queryFn: () => workplanRepo.get() });
 export const useYears = (studyId: string) =>
@@ -48,8 +51,11 @@ export function useBudgetData() {
     workplan = useWorkplan(),
     lines = useLines(),
     events = useEvents(),
-    attachments = useAttachments();
-  const ready = [period, workplan, lines, events, attachments].every((q) => q.isSuccess);
+    attachments = useAttachments(),
+    deliveries = useDeliveries();
+  const ready = [period, workplan, lines, events, attachments, deliveries].every(
+    (q) => q.isSuccess,
+  );
   return {
     ready,
     period: period.data ?? null,
@@ -59,6 +65,8 @@ export function useBudgetData() {
     lines: lines.data ?? [],
     events: events.data ?? [],
     attachments: attachments.data ?? [],
+    deliveries: deliveries.data?.deliveries ?? [],
+    results: deliveries.data?.results ?? [],
   };
 }
 
@@ -176,9 +184,31 @@ export const useScheduleLine = () =>
     eventRepo.schedule(a.lineId, a.dates),
   );
 export const useAddAttachment = () =>
-  useM((a: { eventId: string; file: File; label?: string }) =>
-    attachmentRepo.add(a.eventId, a.file, a.label),
+  useM((a: { target: Parameters<typeof attachmentRepo.add>[0]; file: File; label?: string }) =>
+    attachmentRepo.add(a.target, a.file, a.label),
   );
+export const useGenerateDeliveries = () =>
+  useM((a: { activityId: string; input: Parameters<typeof deliveryRepo.generate>[1] }) =>
+    deliveryRepo.generate(a.activityId, a.input),
+  );
+export const useAddDelivery = () =>
+  useM((a: { activityId: string; input: Parameters<typeof deliveryRepo.add>[1] }) =>
+    deliveryRepo.add(a.activityId, a.input),
+  );
+export const useUpdateDelivery = () =>
+  useM((a: { id: string; patch: Parameters<typeof deliveryRepo.update>[1] }) =>
+    deliveryRepo.update(a.id, a.patch),
+  );
+export const useRemoveDelivery = () => useM(deliveryRepo.remove);
+export const useSetDeliveryResult = () =>
+  useM((a: { deliveryId: string; indicatorId: string; value: number | null; notes?: string }) =>
+    deliveryRepo.setResult(a.deliveryId, a.indicatorId, a.value, a.notes),
+  );
+export const useLinkEvents = () =>
+  useM((a: { deliveryId: string; eventIds: string[] }) =>
+    deliveryRepo.linkEvents(a.deliveryId, a.eventIds),
+  );
+export const useUnlinkEvents = () => useM(deliveryRepo.unlinkEvents);
 export const useRemoveAttachment = () => useM(attachmentRepo.remove);
 export const useImportLines = () =>
   useM((a: { activityId: string; rows: Parameters<typeof adminRepo.importLines>[1] }) =>

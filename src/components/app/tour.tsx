@@ -8,7 +8,7 @@ type Path = "/" | "/activities" | "/budget" | "/spending" | "/settings";
 type TourStep = { path: Path; el?: string; title: string; body: string; side?: Side };
 
 // Bump the version when the steps change so everyone sees the new tour once.
-const SEEN_KEY = "tour:v2:";
+const SEEN_KEY = "tour:v3:";
 
 const nav = (k: string) =>
   window.matchMedia("(min-width: 768px)").matches
@@ -66,13 +66,13 @@ function tourSteps(): TourStep[] {
       path: "/activities",
       el: nav("activities"),
       title: "Activities",
-      body: "The workplan: objectives, outcomes and the activities under them. Open an activity to add indicators, responsible people and sites.",
+      body: "The workplan: objectives, outcomes and the activities under them. Open an activity to track its deliveries, and to add indicators, responsible people and sites.",
     },
     {
       path: "/activities",
       el: at("activities-tree"),
       title: "Objectives, outcomes and activities",
-      body: "Add and reorder items, search, and filter by general or site activities.",
+      body: "Add and reorder items, search, and filter by kind or status. Each activity shows its status and how many deliveries are completed, such as 2 of 5. Open an activity to create its rounds, set a delivery's status and add proof.",
       side: "top",
     },
     {
@@ -119,7 +119,7 @@ function tourSteps(): TourStep[] {
       path: "/spending",
       el: at("spending-filters"),
       title: "Filters",
-      body: "Narrow the list by activity, line, month or flag, or search by name.",
+      body: "Narrow the list by activity, delivery, line, month or flag, or search by name. A spending record can be linked to a delivery of the same activity.",
       side: "bottom",
     },
     {

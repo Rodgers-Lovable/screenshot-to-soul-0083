@@ -11,14 +11,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAddAttachment, useBudgetData, useRemoveAttachment, useUpdateEvent } from "@/data/hooks";
+import {
+  useAddAttachment,
+  useBudgetData,
+  useRemoveAttachment,
+  useUpdateEvent,
+  useWorkplan,
+} from "@/data/hooks";
 import { eventFigures, eventPlanned } from "@/lib/calc";
+import { roundText } from "@/lib/deliveries";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { StatusChip } from "./chips";
@@ -38,6 +52,7 @@ type FormOut = z.output<typeof schema>;
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx";
 const OK_TYPES = /\.(pdf|jpe?g|png|xlsx)$/i;
 const MAX = 10 * 1024 * 1024;
+const NO_DELIVERY = "__none";
 const unitWord = (u: string, n: number) =>
   u === "pax" ? (n === 1 ? "participant" : "participants") : u;
 
@@ -51,7 +66,8 @@ export function RecordActualsForm({ eventId, onDone }: { eventId: string; onDone
 }
 
 function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone?: () => void }) {
-  const { attachments } = useBudgetData();
+  const data = useBudgetData();
+  const { attachments } = data;
   const files = attachments.filter((a) => a.eventId === ev.id);
   const f = useFmt();
   const { canEdit, closed } = useYear();
@@ -61,6 +77,10 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const [pending, setPending] = useState<{ file: File; label: string }[]>([]);
   const [drag, setDrag] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deliveryId, setDeliveryId] = useState(ev.deliveryId ?? NO_DELIVERY);
+  const wp = useWorkplan();
+  const siteOf = (id?: string) => wp.data?.sites.find((x) => x.id === id)?.name;
+  const choices = data.deliveries.filter((x) => x.activityId === line.activityId);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"save" | "done" | "cancel" | "reopen" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +150,11 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   async function uploadPending() {
     if (!canEdit) return 0;
     for (const p of pending)
-      await addAtt.mutateAsync({ eventId: ev.id, file: p.file, label: p.label || undefined });
+      await addAtt.mutateAsync({
+        target: { eventId: ev.id },
+        file: p.file,
+        label: p.label || undefined,
+      });
     const n = pending.length;
     setPending([]);
     return n;
@@ -161,6 +185,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           actualUnitCostCents: kesToCents(v.unitCost),
           actualDuration: v.duration,
           location: v.location || undefined,
+          deliveryId: deliveryId === NO_DELIVERY ? undefined : deliveryId,
           notes:
             extraNotes !== undefined
               ? [v.notes, `Cancelled: ${extraNotes}`].filter(Boolean).join("\n")
@@ -250,6 +275,27 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="location">Location</Label>
             <Input id="location" {...form.register("location")} />
+          </div>
+          <div className="space-y-1 sm:col-span-2">
+            <Label>Linked delivery</Label>
+            <Select value={deliveryId} onValueChange={setDeliveryId}>
+              <SelectTrigger aria-label="Linked delivery">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_DELIVERY}>Not linked to a delivery</SelectItem>
+                {choices.map((x) => (
+                  <SelectItem key={x.id} value={x.id}>
+                    {roundText(x)}
+                    {x.siteId ? ` at ${siteOf(x.siteId) ?? "a site"}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Optional. Only deliveries of this line&apos;s activity are listed. Linking does not
+              change any amounts.
+            </p>
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="notes">Notes</Label>

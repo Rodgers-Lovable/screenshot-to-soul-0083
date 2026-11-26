@@ -61,11 +61,15 @@ export interface BudgetEvent {
   actualUnitCostCents?: number;
   actualDuration?: number;
   notes?: string;
+  /** The delivery this spending record is linked to. Same activity only. */
+  deliveryId?: string;
 }
 
+/** A receipt belongs to a spending record, proof of delivery to a delivery. Exactly one is set. */
 export interface Attachment {
   id: string;
-  eventId: string;
+  eventId?: string;
+  deliveryId?: string;
   fileName: string;
   fileUrl: string;
   mimeType: string;
@@ -170,4 +174,26 @@ export interface WorkplanData {
   responsibles: ActivityResponsible[];
   activitySites: ActivitySite[];
   audit: AuditEntry[];
+}
+
+export type DeliveryStatus = "planned" | "in_progress" | "completed";
+
+/** One round of an activity, at one site for a site activity. A general activity has no site. */
+export interface Delivery {
+  id: string;
+  activityId: string;
+  siteId?: string;
+  roundNumber: number;
+  roundLabel: string;
+  plannedDate?: string;
+  actualDate?: string;
+  status: DeliveryStatus;
+  notes: string;
+}
+
+export interface DeliveryResult {
+  deliveryId: string;
+  indicatorId: string;
+  value: number;
+  notes: string;
 }

@@ -284,5 +284,19 @@ export function makeSeed(): StoreData {
   ev("l25", 1).plannedDate = "2026-12-02";
   // l12, l22, l23 left without dates → "No date" flag.
 
-  return { period, objectives, outcomes, activities, lines, events, attachments, audit: [] };
+  return {
+    period,
+    objectives,
+    outcomes,
+    activities,
+    sites: [],
+    activitySites: [],
+    indicators: [],
+    lines,
+    deliveries: [],
+    results: [],
+    events,
+    attachments,
+    audit: [],
+  };
 }
