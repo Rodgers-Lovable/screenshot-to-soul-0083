@@ -698,6 +698,7 @@ function ImportPanel() {
                         <td>
                           <UnitInput
                             aria-label="Unit"
+                            className="h-8 min-w-28"
                             value={r.quantityUnit}
                             suggestions={qtyUnits}
                             onChange={(v) => setRow(i, { quantityUnit: v })}
@@ -708,6 +709,7 @@ function ImportPanel() {
                         <td>
                           <UnitInput
                             aria-label="Duration unit"
+                            className="h-8 min-w-28"
                             value={r.durationUnit}
                             suggestions={durUnits}
                             onChange={(v) => setRow(i, { durationUnit: v })}
