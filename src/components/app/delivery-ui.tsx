@@ -959,7 +959,7 @@ function Editor({
               Close
             </Button>
             {canEdit && (
-              <Button onClick={save} disabled={!!problem || saving}>
+              <Button onClick={save} loading={saving} disabled={!!problem}>
                 Save
               </Button>
             )}
