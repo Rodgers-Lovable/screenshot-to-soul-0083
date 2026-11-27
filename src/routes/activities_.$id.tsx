@@ -42,6 +42,7 @@ import {
 } from "@/components/app/workplan-ui";
 import { DeliveriesCard } from "@/components/app/delivery-ui";
 import { activityChip, indicatorTotals } from "@/lib/deliveries";
+import { SELECT_NONE } from "@/lib/select";
 import {
   activityFormValid,
   multiAddMessage,
@@ -366,7 +367,7 @@ function IndicatorsCard({
                 </>
               ) : (
                 <>
-                  <span className="mr-auto min-w-0 break-words">{r.name}</span>
+                  <span className="mr-auto min-w-0 wrap-break-word">{r.name}</span>
                   <span className="text-muted-foreground tabular-nums">
                     {totals.get(r.id)?.recorded
                       ? `${totals.get(r.id)?.total} recorded${r.target === undefined ? "" : ` of ${r.target} (${totals.get(r.id)?.percent}%)`}`
@@ -457,8 +458,6 @@ function IndicatorsCard({
   );
 }
 
-const NO_MEMBER = "__none";
-
 function ResponsibleCard({
   activityId,
   rows,
@@ -474,7 +473,7 @@ function ResponsibleCard({
   const upd = useUpdateResponsible();
   const rm = useRemoveResponsible();
   const [name, setName] = useState("");
-  const [userId, setUserId] = useState(NO_MEMBER);
+  const [userId, setUserId] = useState(SELECT_NONE);
   const emailOf = (uid?: string) => members.find((m) => m.userId === uid)?.email;
   const parsed = parseMultiEntry(
     name,
@@ -492,12 +491,12 @@ function ResponsibleCard({
     add.mutate(
       {
         activityId,
-        input: { text: name, userId: multi || userId === NO_MEMBER ? undefined : userId },
+        input: { text: name, userId: multi || userId === SELECT_NONE ? undefined : userId },
       },
       {
         onSuccess: (res) => {
           setName("");
-          setUserId(NO_MEMBER);
+          setUserId(SELECT_NONE);
           toast.success(multiAddMessage("person", "people", res.added, res.skipped.length));
         },
       },
@@ -516,7 +515,7 @@ function ResponsibleCard({
         <ul className="divide-y rounded-md border text-sm">
           {rows.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
-              <span className="mr-auto min-w-0 break-words">
+              <span className="mr-auto min-w-0 wrap-break-word">
                 {r.name}
                 {r.userId && (
                   <span className="ml-2 text-xs text-muted-foreground">
@@ -560,15 +559,15 @@ function ResponsibleCard({
                 onChange={(e) => {
                   setName(e.target.value);
                   const p = parseMultiEntry(e.target.value);
-                  if (p.add.length + p.skipped.length > 1) setUserId(NO_MEMBER);
+                  if (p.add.length + p.skipped.length > 1) setUserId(SELECT_NONE);
                 }}
               />
-              <Select value={multi ? NO_MEMBER : userId} onValueChange={pick} disabled={multi}>
+              <Select value={multi ? SELECT_NONE : userId} onValueChange={pick} disabled={multi}>
                 <SelectTrigger aria-label="Link to a team member" className="w-full sm:w-56">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_MEMBER}>Not linked to an account</SelectItem>
+                  <SelectItem value={SELECT_NONE}>Not linked to an account</SelectItem>
                   {members.map((m) => (
                     <SelectItem key={m.userId} value={m.userId}>
                       {m.email}

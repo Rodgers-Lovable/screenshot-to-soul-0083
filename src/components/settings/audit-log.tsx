@@ -11,16 +11,17 @@ import {
 import { TablePagination } from "@/components/app/table-pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { useAudit } from "@/data/hooks";
+import { SELECT_ALL } from "@/lib/select";
 
 export function AuditLog() {
   const { data = [] } = useAudit();
-  const [entity, setEntity] = useState("__all");
+  const [entity, setEntity] = useState<string>(SELECT_ALL);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const entities = useMemo(() => [...new Set(data.map((a) => a.entity))].sort(), [data]);
   const rows = data.filter(
     (a) =>
-      (entity === "__all" || a.entity === entity) &&
+      (entity === SELECT_ALL || a.entity === entity) &&
       (!from || a.changedAt.slice(0, 10) >= from) &&
       (!to || a.changedAt.slice(0, 10) <= to),
   );
@@ -45,7 +46,7 @@ export function AuditLog() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">All entities</SelectItem>
+            <SelectItem value={SELECT_ALL}>All entities</SelectItem>
             {entities.map((e) => (
               <SelectItem key={e} value={e}>
                 {e}

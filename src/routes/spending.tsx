@@ -33,7 +33,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useBudgetData, useWorkplan } from "@/data/hooks";
-import { roundText } from "@/lib/deliveries";
+import { deliveryLabel } from "@/lib/deliveries";
+import { SELECT_ALL, fromSelect } from "@/lib/select";
 import {
   eventFigures,
   eventFlags,
@@ -83,16 +84,16 @@ const TABS: { v: EventTab; l: string }[] = [
   { v: "done", l: "Done" },
   { v: "all", l: "All" },
 ];
-const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+const searchText = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 
 export const Route = createFileRoute("/spending")({
   validateSearch: (s: Record<string, unknown>): SpendingSearch => ({
     tab: TABS.some((t) => t.v === s.tab) ? (s.tab as EventTab) : undefined,
-    activity: str(s.activity),
-    delivery: str(s.delivery),
-    line: str(s.line),
-    month: str(s.month),
-    q: str(s.q),
+    activity: searchText(s.activity),
+    delivery: searchText(s.delivery),
+    line: searchText(s.line),
+    month: searchText(s.month),
+    q: searchText(s.q),
     flag: FLAGS.some((f) => f.v === s.flag) ? (s.flag as EventFlagFilter) : undefined,
     view: s.view === "calendar" || s.view === "flat" ? s.view : undefined,
   }),
@@ -121,7 +122,6 @@ type Row = {
   n: number;
   fig: ReturnType<typeof eventFigures>;
 };
-const ALL = "__all";
 const HINT_KEY = "pbt-events-hint-dismissed";
 const niceDate = (d?: string) => (d ? format(parseISO(d), "d MMM yyyy") : undefined);
 
@@ -149,15 +149,15 @@ function SpendingPage() {
   // "Round 2 at Site A", in the activity's words, for the delivery filter and the rows.
   const deliveryText = useMemo(() => {
     const sites = new Map((wp.data?.sites ?? []).map((x) => [x.id, x.name]));
+    const activityTitle = new Map(d.activities.map((a) => [a.id, a.title]));
     return new Map(
       d.deliveries.map((x) => {
-        const a = d.activities.find((y) => y.id === x.activityId);
-        const where = x.siteId ? ` at ${sites.get(x.siteId) ?? "a site"}` : "";
+        const short = deliveryLabel(x, (id) => sites.get(id));
         return [
           x.id,
           {
-            short: `${roundText(x)}${where}`,
-            long: `${a?.title ?? ""} · ${roundText(x)}${where}`,
+            short,
+            long: `${activityTitle.get(x.activityId) ?? ""} · ${short}`,
             activityId: x.activityId,
           },
         ];
@@ -360,7 +360,6 @@ function SpendingPage() {
             outcomes: d.outcomes,
             activities: d.activities,
           }).map((o) => ({ v: o.id, l: o.label }))}
-          all={ALL}
         />
         <FilterSelect
           label="Line"
@@ -369,7 +368,6 @@ function SpendingPage() {
           opts={d.lines
             .filter((l) => !search.activity || l.activityId === search.activity)
             .map((l) => ({ v: l.id, l: l.description }))}
-          all={ALL}
         />
         <FilterSelect
           label="Round"
@@ -379,21 +377,18 @@ function SpendingPage() {
           opts={[...deliveryText.entries()]
             .filter(([, t]) => !search.activity || t.activityId === search.activity)
             .map(([id, t]) => ({ v: id, l: t.long }))}
-          all={ALL}
         />
         <FilterSelect
           label="Month"
           value={search.month}
           onChange={(v) => set({ month: v })}
           opts={months.map((m) => ({ v: m, l: format(parseISO(m + "-01"), "MMM yyyy") }))}
-          all={ALL}
         />
         <FilterSelect
           label="Flag"
           value={search.flag}
           onChange={(v) => set({ flag: v as EventFlagFilter | undefined })}
           opts={FLAGS}
-          all={ALL}
         />
         <Input
           aria-label="Search spending"
@@ -730,7 +725,6 @@ function FilterSelect({
   value,
   onChange,
   opts,
-  all,
   plural,
 }: {
   label: string;
@@ -738,10 +732,9 @@ function FilterSelect({
   value?: string;
   onChange: (v: string | undefined) => void;
   opts: { v: string; l: string }[];
-  all: string;
 }) {
   return (
-    <Select value={value ?? all} onValueChange={(v) => onChange(v === all ? undefined : v)}>
+    <Select value={value ?? SELECT_ALL} onValueChange={(v) => onChange(fromSelect(v))}>
       <SelectTrigger className="h-9 w-auto max-w-55" aria-label={label}>
         <Truncated
           text={opts.find((o) => o.v === value)?.l ?? `All ${plural ?? `${label.toLowerCase()}s`}`}
@@ -750,7 +743,7 @@ function FilterSelect({
         </Truncated>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={all}>All {plural ?? `${label.toLowerCase()}s`}</SelectItem>
+        <SelectItem value={SELECT_ALL}>All {plural ?? `${label.toLowerCase()}s`}</SelectItem>
         {opts.map((o) => (
           <SelectItem key={o.v} value={o.v}>
             {o.l}

@@ -28,7 +28,7 @@ import {
   nextRound,
   parentDeleteBlock,
   planRounds,
-  roundText,
+  deliveryLabel,
   siteRemovalBlock,
   validateDelivery,
   validateEventLink,
@@ -287,7 +287,7 @@ const uid = () =>
     ? crypto.randomUUID()
     : String(Math.random()).slice(2);
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const str = (v: unknown) =>
+const auditText = (v: unknown) =>
   v === undefined || v === null || v === ""
     ? null
     : typeof v === "object"
@@ -307,8 +307,8 @@ function audit(
     entity,
     entityId,
     field,
-    oldValue: str(oldValue),
-    newValue: str(newValue),
+    oldValue: auditText(oldValue),
+    newValue: auditText(newValue),
     changedAt: new Date().toISOString(),
     changedBy: actor,
   });
@@ -320,7 +320,7 @@ function auditCreate(entity: string, rec: object & { id: string }) {
 function applyPatch<T extends { id: string }>(entity: string, rec: T, patch: Partial<T>) {
   for (const [k, v] of Object.entries(patch) as [keyof T & string, T[keyof T & string]][]) {
     if (k === "id") continue;
-    if (str(rec[k]) !== str(v)) {
+    if (auditText(rec[k]) !== auditText(v)) {
       audit(entity, rec.id, k, rec[k], v);
       rec[k] = v;
     }
@@ -1015,11 +1015,8 @@ const deliveryOf = (id: string) =>
     db().deliveries.find((x) => x.id === id),
     "Round",
   );
-function siteLabel(siteId?: string) {
-  return siteId ? (db().sites.find((s) => s.id === siteId)?.name ?? "a site") : "";
-}
-const deliveryText = (x: Delivery) =>
-  `${roundText(x)}${x.siteId ? ` at ${siteLabel(x.siteId)}` : ""}`;
+const siteLabel = (siteId: string) => db().sites.find((s) => s.id === siteId)?.name;
+const deliveryText = (x: Delivery) => deliveryLabel(x, siteLabel);
 function activeSelected(activityId: string) {
   const d = db();
   return d.activitySites
@@ -1095,7 +1092,7 @@ export const deliveryRepo: DeliveryRepo = {
         throw new Error("The round must be a whole number above zero.");
       if (isDuplicateRound(mine, round, siteId))
         throw new Error(
-          `Round ${round}${siteId ? ` at ${siteLabel(siteId)}` : ""} already exists.`,
+          `Round ${round}${siteId ? ` at ${siteLabel(siteId) ?? "a site"}` : ""} already exists.`,
         );
       const bad = validateDelivery({ status: "planned", plannedDate: input.plannedDate });
       if (bad) throw new Error(bad);

@@ -57,11 +57,14 @@ import {
   linkableEvents,
   nextRound,
   planRounds,
+  deliveryLabel,
   roundText,
   validateDelivery,
   validateRounds,
   type DeliveryFilter,
 } from "@/lib/deliveries";
+import { EVIDENCE_ACCEPT, checkEvidenceFiles } from "@/lib/evidence";
+import { SELECT_ALL, SELECT_NONE, fromSelect } from "@/lib/select";
 import { frequencyText } from "@/lib/workplan";
 import { todayISO } from "@/lib/format";
 import type { Activity, BudgetEvent, Delivery, DeliveryStatus } from "@/lib/types";
@@ -69,11 +72,6 @@ import { CLOSED_HINT, useYear } from "./active-year-context";
 import { Flags } from "./chips";
 import { ConfirmDelete, DeliveryStatusChip } from "./workplan-ui";
 
-const ALL = "__all";
-const NONE = "__none";
-const ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx";
-const OK_TYPES = /\.(pdf|jpe?g|png|xlsx)$/i;
-const MAX = 10 * 1024 * 1024;
 const LONG_LIST = 8;
 
 /** Everything the delivery screens read, with lookups. */
@@ -120,7 +118,7 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
           onClick={() => setOpen(x.id)}
           className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-left hover:bg-muted/40"
         >
-          <span className="min-w-0 flex-1 basis-40 break-words font-medium">{title}</span>
+          <span className="min-w-0 flex-1 basis-40 wrap-break-word font-medium">{title}</span>
           <DeliveryStatusChip status={x.status} />
           <span className="text-xs text-muted-foreground tabular-nums">
             {x.status === "completed"
@@ -185,16 +183,14 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
           <div className="flex flex-wrap gap-2">
             {activity.kind === "site" && (
               <Select
-                value={filter.siteId ?? ALL}
-                onValueChange={(v) =>
-                  setFilter((f) => ({ ...f, siteId: v === ALL ? undefined : v }))
-                }
+                value={filter.siteId ?? SELECT_ALL}
+                onValueChange={(v) => setFilter((f) => ({ ...f, siteId: fromSelect(v) }))}
               >
                 <SelectTrigger aria-label="Filter by site" className="w-full sm:w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>All sites</SelectItem>
+                  <SelectItem value={SELECT_ALL}>All sites</SelectItem>
                   {siteIdsUsed.map((id) => (
                     <SelectItem key={id} value={id}>
                       {siteName(id)}
@@ -204,16 +200,16 @@ export function DeliveriesCard({ activity }: { activity: Activity }) {
               </Select>
             )}
             <Select
-              value={filter.status ?? ALL}
+              value={filter.status ?? SELECT_ALL}
               onValueChange={(v) =>
-                setFilter((f) => ({ ...f, status: v === ALL ? undefined : (v as DeliveryStatus) }))
+                setFilter((f) => ({ ...f, status: fromSelect(v) as DeliveryStatus | undefined }))
               }
             >
               <SelectTrigger aria-label="Filter by status" className="w-full sm:w-44">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All statuses</SelectItem>
+                <SelectItem value={SELECT_ALL}>All statuses</SelectItem>
                 {DELIVERY_STATUSES.map((s) => (
                   <SelectItem key={s} value={s}>
                     {DELIVERY_STATUS_LABEL[s]}
@@ -451,12 +447,15 @@ function AddDeliveryDialog({
           {activity.kind === "site" && (
             <div className="space-y-1 sm:col-span-2">
               <Label>Site</Label>
-              <Select value={site || NONE} onValueChange={(v) => setSite(v === NONE ? "" : v)}>
+              <Select
+                value={site || SELECT_NONE}
+                onValueChange={(v) => setSite(fromSelect(v) ?? "")}
+              >
                 <SelectTrigger aria-label="Site">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>Choose a site</SelectItem>
+                  <SelectItem value={SELECT_NONE}>Choose a site</SelectItem>
                   {active.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {siteName(s.id)}
@@ -590,7 +589,7 @@ function Editor({
     ),
   );
   const [pending, setPending] = useState<{ file: File; label: string }[]>([]);
-  const [pickLink, setPickLink] = useState(NONE);
+  const [pickLink, setPickLink] = useState(SELECT_NONE);
   const [confirm, setConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -618,13 +617,9 @@ function Editor({
   };
   const addFiles = (list: FileList | null) => {
     if (!list || !canEdit) return;
-    const next: { file: File; label: string }[] = [];
-    for (const file of Array.from(list)) {
-      if (!OK_TYPES.test(file.name)) toast.error(`${file.name}: only PDF, JPG, PNG or XLSX`);
-      else if (file.size > MAX) toast.error(`${file.name} is over 10 MB`);
-      else next.push({ file, label: "" });
-    }
-    setPending((p) => [...p, ...next]);
+    const { ok, problems } = checkEvidenceFiles(Array.from(list));
+    problems.forEach((m) => toast.error(m));
+    setPending((p) => [...p, ...ok.map((file) => ({ file, label: "" }))]);
   };
 
   async function save() {
@@ -669,7 +664,7 @@ function Editor({
     }
   }
 
-  const heading = `${roundText(x)}${x.siteId ? ` at ${siteName(x.siteId)}` : ""}`;
+  const heading = deliveryLabel(x, siteName);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
@@ -760,7 +755,7 @@ function Editor({
               ref={inputRef}
               type="file"
               multiple
-              accept={ACCEPT}
+              accept={EVIDENCE_ACCEPT}
               className="hidden"
               onChange={(e) => {
                 addFiles(e.target.files);
@@ -919,7 +914,7 @@ function Editor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>Choose a spending record</SelectItem>
+                    <SelectItem value={SELECT_NONE}>Choose a spending record</SelectItem>
                     {options.map((e) => (
                       <SelectItem key={e.id} value={e.id}>
                         {e.title}
@@ -930,13 +925,13 @@ function Editor({
                 <Button
                   variant="outline"
                   loading={link.isPending}
-                  disabled={pickLink === NONE}
+                  disabled={pickLink === SELECT_NONE}
                   onClick={() =>
                     link.mutate(
                       { deliveryId: x.id, eventIds: [pickLink] },
                       {
                         onSuccess: () => {
-                          setPickLink(NONE);
+                          setPickLink(SELECT_NONE);
                           toast.success("Linked");
                         },
                       },

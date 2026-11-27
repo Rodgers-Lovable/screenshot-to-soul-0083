@@ -59,6 +59,12 @@ export function byActivity(deliveries: Delivery[]): Map<string, Delivery[]> {
 export const roundText = (d: Pick<Delivery, "roundNumber" | "roundLabel">) =>
   d.roundLabel.trim() ? `Round ${d.roundNumber}: ${d.roundLabel.trim()}` : `Round ${d.roundNumber}`;
 
+/** "Round 2 at Site A". A site that can't be found reads as "a site". */
+export const deliveryLabel = (
+  d: Pick<Delivery, "roundNumber" | "roundLabel" | "siteId">,
+  siteName: (id: string) => string | undefined,
+) => (d.siteId ? `${roundText(d)} at ${siteName(d.siteId) || "a site"}` : roundText(d));
+
 export interface RoundGroup {
   roundNumber: number;
   label: string;

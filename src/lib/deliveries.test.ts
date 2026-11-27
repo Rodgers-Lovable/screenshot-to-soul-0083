@@ -18,6 +18,7 @@ import {
   progressText,
   roundDates,
   roundText,
+  deliveryLabel,
   validateDelivery,
   validateEventLink,
   validateRounds,
@@ -196,6 +197,13 @@ describe("rounds", () => {
       "Round 2: Midline",
     );
     expect(roundText(del("x", "planned"))).toBe("Round 1");
+  });
+  it("labels a round with its site", () => {
+    const names: Record<string, string> = { s1: "Kisumu" };
+    const name = (id: string) => names[id];
+    expect(deliveryLabel(del("x", "planned", { siteId: "s1" }), name)).toBe("Round 1 at Kisumu");
+    expect(deliveryLabel(del("x", "planned", { siteId: "gone" }), name)).toBe("Round 1 at a site");
+    expect(deliveryLabel(del("x", "planned"), name)).toBe("Round 1");
   });
   it("filters by site and status", () => {
     const list = [
