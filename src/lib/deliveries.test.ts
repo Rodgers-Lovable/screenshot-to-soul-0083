@@ -139,6 +139,20 @@ describe("planRounds", () => {
     expect(p.outsideYear).toBe(2);
     expect(p.create).toHaveLength(3);
   });
+  it("warns about no dates while the year has none", () => {
+    const plan = (year: { startDate: string; endDate: string }) =>
+      planRounds({
+        kind: "general",
+        rounds: 2,
+        sites: [],
+        existing: [],
+        firstDate: "2027-01-01",
+        repeat: { every: 1, unit: "months" },
+        year,
+      });
+    expect(plan({ startDate: "2026-09-30", endDate: "" }).outsideYear).toBe(0);
+    expect(plan({ startDate: "", endDate: "2027-09-29" }).outsideYear).toBe(0);
+  });
   it("makes nothing for a site activity with no active sites", () => {
     const p = planRounds({
       kind: "site",

@@ -160,10 +160,11 @@ export function planRounds(o: {
       else create.push({ roundNumber: r, siteId, plannedDate: dates[r - 1] });
     }
   }
-  const outsideYear = o.year
+  // A year without both dates can't tell what falls outside it.
+  const year = o.year?.startDate && o.year.endDate ? o.year : null;
+  const outsideYear = year
     ? create.filter(
-        (c) =>
-          c.plannedDate && (c.plannedDate < o.year!.startDate || c.plannedDate > o.year!.endDate),
+        (c) => c.plannedDate && (c.plannedDate < year.startDate || c.plannedDate > year.endDate),
       ).length
     : 0;
   return { create, existing, outsideYear, archivedSites };
