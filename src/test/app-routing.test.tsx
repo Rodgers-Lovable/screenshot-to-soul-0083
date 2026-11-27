@@ -46,3 +46,15 @@ describe("App routing", () => {
     expect(router.state.location.pathname).toBe("/spending/e1/record");
   });
 });
+
+describe("Old spending links", () => {
+  it("ignore a retired component filter and keep the rest", () => {
+    const route = make().routesById["/spending"] as unknown as {
+      options: { validateSearch: (s: Record<string, unknown>) => Record<string, unknown> };
+    };
+    const search = route.options.validateSearch({ component: "old", line: "l1", activity: "a1" });
+    expect(search).not.toHaveProperty("component");
+    expect(search.activity).toBe("a1");
+    expect(search.line).toBe("l1");
+  });
+});

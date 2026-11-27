@@ -1,9 +1,11 @@
-export type DurationUnit = "days" | "months" | "one-off";
-export type QuantityUnit = "pax" | "SMS" | "units" | "lines" | "vehicles" | "sets";
+/** Units are free text. "one-off" is the only duration unit with special meaning. */
+export type DurationUnit = string;
+export type QuantityUnit = string;
 export type EventStatus = "planned" | "done" | "cancelled";
 export type CostCategory = "Personnel" | "Travel" | "Supplies" | "Contractual" | "Other";
 
-export const DURATION_UNITS: DurationUnit[] = ["days", "months", "one-off"];
+export const ONE_OFF = "one-off";
+export const DURATION_UNITS: DurationUnit[] = ["days", "months", ONE_OFF];
 export const QUANTITY_UNITS: QuantityUnit[] = ["pax", "SMS", "units", "lines", "vehicles", "sets"];
 export const COST_CATEGORIES: CostCategory[] = [
   "Personnel",
@@ -28,17 +30,9 @@ export interface BudgetPeriod {
   copiedFromId?: string;
 }
 
-export interface Component {
-  id: string;
-  periodId: string;
-  code: string;
-  name: string;
-  sortOrder: number;
-}
-
 export interface BudgetLine {
   id: string;
-  componentId: string;
+  activityId: string;
   groupLabel?: string;
   description: string;
   quantity: number;
@@ -51,6 +45,7 @@ export interface BudgetLine {
   costCategory?: CostCategory;
   financePostedCents?: number;
   sortOrder: number;
+  copiedFromId?: string;
 }
 
 export interface BudgetEvent {

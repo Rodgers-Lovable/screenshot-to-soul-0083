@@ -11,7 +11,10 @@ import {
   parseMultiEntry,
   nextSortOrder,
   pickDefaultYear,
-  suggestNextYear,
+  financialYearContaining,
+  nextFinancialYearAfter,
+  defaultNewYear,
+  prefillYearDates,
   yearLabel,
   validateRepeat,
   validateYear,
@@ -226,31 +229,68 @@ describe("frequencyText", () => {
   });
 });
 
-describe("suggestNextYear", () => {
-  it("starts the next day and lasts a year", () => {
-    expect(suggestNextYear({ startDate: "2026-01-01", endDate: "2026-12-31" })).toEqual({
-      name: "2027",
-      startDate: "2027-01-01",
-      endDate: "2027-12-31",
+describe("financial years", () => {
+  it("puts 29 Sep and 30 Sep on different sides of the boundary", () => {
+    expect(financialYearContaining("2026-09-29")).toEqual({
+      name: "FY 2025/26",
+      startDate: "2025-09-30",
+      endDate: "2026-09-29",
+    });
+    expect(financialYearContaining("2026-09-30")).toEqual({
+      name: "FY 2026/27",
+      startDate: "2026-09-30",
+      endDate: "2027-09-29",
     });
   });
-  it("handles a year that crosses calendar years and leap days", () => {
-    expect(suggestNextYear({ startDate: "2026-07-01", endDate: "2027-06-30" })).toEqual({
-      name: "2027/2028",
-      startDate: "2027-07-01",
-      endDate: "2028-06-30",
+  it("handles January, a leap day and the century name", () => {
+    expect(financialYearContaining("2027-01-15")?.startDate).toBe("2026-09-30");
+    expect(financialYearContaining("2028-02-29")).toEqual({
+      name: "FY 2027/28",
+      startDate: "2027-09-30",
+      endDate: "2028-09-29",
     });
-    expect(suggestNextYear({ startDate: "2027-03-01", endDate: "2028-02-29" })?.endDate).toBe(
-      "2029-02-28",
-    );
+    expect(financialYearContaining("2099-10-01")?.name).toBe("FY 2099/00");
   });
-  it("keeps the length of a short period", () => {
-    expect(suggestNextYear({ startDate: "2026-01-01", endDate: "2026-06-30" })?.startDate).toBe(
-      "2026-07-01",
-    );
+  it("rejects invalid dates", () => {
+    expect(financialYearContaining("")).toBeNull();
+    expect(financialYearContaining("2026-9-1")).toBeNull();
   });
-  it("gives nothing for missing dates", () => {
-    expect(suggestNextYear({ startDate: "", endDate: "" })).toBeNull();
+  it("gives the year after a financial year", () => {
+    expect(nextFinancialYearAfter({ endDate: "2027-09-29" })).toEqual({
+      name: "FY 2027/28",
+      startDate: "2027-09-30",
+      endDate: "2028-09-29",
+    });
+  });
+  it("never overlaps the previous year, even for calendar-year dates", () => {
+    const next = nextFinancialYearAfter({ endDate: "2026-12-31" });
+    expect(next?.startDate).toBe("2027-09-30");
+    expect(next!.startDate > "2026-12-31").toBe(true);
+    expect(nextFinancialYearAfter({ endDate: "2026-09-30" })?.startDate).toBe("2027-09-30");
+    expect(nextFinancialYearAfter({ endDate: "" })).toBeNull();
+  });
+  it("defaults to today's financial year, or the one after the latest year", () => {
+    expect(defaultNewYear([], "2026-11-23")?.startDate).toBe("2026-09-30");
+    expect(defaultNewYear([], "2026-09-29")?.startDate).toBe("2025-09-30");
+    const years = [yr("a", "2025-09-30", "2026-09-29"), yr("b", "2026-09-30", "2027-09-29")];
+    expect(defaultNewYear(years, "2026-11-23")?.startDate).toBe("2027-09-30");
+    expect(defaultNewYear([yr("x", "", "")], "2026-11-23")?.startDate).toBe("2026-09-30");
+  });
+  it("prefills blank dates without touching dates that are set", () => {
+    const blank = { startDate: "", endDate: "" };
+    expect(prefillYearDates(blank, "2026-11-23")).toEqual({
+      startDate: "2026-09-30",
+      endDate: "2027-09-29",
+    });
+    expect(prefillYearDates({ startDate: "2026-09-30", endDate: "" }, "2030-01-01")).toEqual({
+      startDate: "2026-09-30",
+      endDate: "2027-09-29",
+    });
+    expect(prefillYearDates({ startDate: "", endDate: "2027-09-29" }, "2030-01-01").startDate).toBe(
+      "2026-09-30",
+    );
+    const set = { startDate: "2026-01-01", endDate: "2026-12-31" };
+    expect(prefillYearDates(set, "2026-11-23")).toBe(set);
   });
   it("labels a year", () => {
     expect(yearLabel("2026-01-01", "2026-12-31")).toBe("2026");

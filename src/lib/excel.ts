@@ -1,13 +1,16 @@
 import * as XLSX from "xlsx";
 import { parseMoney } from "./format";
-import { lineSummary, sumSummaries } from "./calc";
+import { lineSummary, sumSummaries, type Summary } from "./calc";
+import { activityLabel, buildBudgetTree, cleanUnit } from "./budget-tree";
 import type {
+  Activity,
   Attachment,
   BudgetEvent,
   BudgetLine,
   BudgetPeriod,
-  Component,
   DurationUnit,
+  Objective,
+  Outcome,
   QuantityUnit,
 } from "./types";
 import { QUANTITY_UNITS } from "./types";
@@ -34,7 +37,7 @@ function unitOf(v: unknown): QuantityUnit {
   const s = String(v ?? "").toLowerCase();
   return (
     QUANTITY_UNITS.find((u) => s.includes(u.toLowerCase())) ??
-    (s.includes("person") || s.includes("people") ? "pax" : "units")
+    (s.includes("person") || s.includes("people") ? "pax" : (cleanUnit(String(v ?? "")) ?? "units"))
   );
 }
 function durUnitOf(header: string, cell: unknown): DurationUnit {
@@ -93,18 +96,53 @@ export async function readWorkbook(file: File): Promise<unknown[][]> {
   return XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null });
 }
 
-export function exportWorkbook(
+type Cell = string | number;
+export interface ExportData {
+  objectives: Objective[];
+  outcomes: Outcome[];
+  activities: Activity[];
+  lines: BudgetLine[];
+  events: BudgetEvent[];
+}
+
+/** The sheets of the Excel export, as rows. Lines are grouped by objective, outcome and activity. */
+export function buildExportSheets(
   period: BudgetPeriod,
-  components: Component[],
-  lines: BudgetLine[],
-  events: BudgetEvent[],
+  data: ExportData,
   attachments: Attachment[],
-) {
-  const wb = XLSX.utils.book_new();
+): { budget: Cell[][]; summary: Cell[][]; events: Cell[][] } {
   const k = (c: number) => c / 100;
-  const summary: (string | number)[][] = [
+  const tree = buildBudgetTree(
+    data.objectives,
+    data.outcomes,
+    data.activities,
+    data.lines,
+    data.events,
+  );
+  const budget: Cell[][] = [
     [
-      "Component",
+      "Objective",
+      "Outcome",
+      "Activity",
+      "Group",
+      "Description",
+      "Qty",
+      "Unit",
+      "Unit cost KES",
+      "Duration",
+      "Duration unit",
+      "Occurrences",
+      "Planned KES",
+      "Actual KES",
+      "Remaining KES",
+      "Finance posted KES",
+    ],
+  ];
+  const summary: Cell[][] = [
+    [
+      "Objective",
+      "Outcome",
+      "Activity",
       "Line",
       "Planned KES",
       "Actual KES",
@@ -115,75 +153,83 @@ export function exportWorkbook(
       "Actual USD",
     ],
   ];
-  for (const c of components) {
-    const cl = lines.filter((l) => l.componentId === c.id);
-    const rows: (string | number)[][] = [
-      [
-        "Group",
-        "Description",
-        "Qty",
-        "Unit",
-        "Unit cost KES",
-        "Duration",
-        "Duration unit",
-        "Occurrences",
-        "Planned KES",
-        "Actual KES",
-        "Remaining KES",
-        "Finance posted KES",
-      ],
-    ];
-    const sums = cl.map((l) => {
-      const s = lineSummary(l, events);
-      rows.push([
-        l.groupLabel ?? "",
-        l.description,
-        l.quantity,
-        l.quantityUnit,
-        k(l.unitCostCents),
-        l.duration,
-        l.durationUnit,
-        l.occurrences,
-        k(s.planned),
-        k(s.actualToDate),
-        k(s.remaining),
-        l.financePostedCents !== undefined ? k(l.financePostedCents) : "",
-      ]);
-      summary.push([
-        `${c.code}. ${c.name}`,
-        l.description,
-        k(s.planned),
-        k(s.actualToDate),
-        k(s.remaining),
-        k(s.stillToSpend),
-        k(s.projectedBalance),
-        s.planned / 100 / period.fxRate,
-        s.actualToDate / 100 / period.fxRate,
-      ]);
-      return s;
-    });
-    const t = sumSummaries(sums);
-    summary.push([
-      `${c.code}. ${c.name} — TOTAL`,
-      "",
-      k(t.planned),
-      k(t.actualToDate),
-      k(t.remaining),
-      k(t.stillToSpend),
-      k(t.projectedBalance),
-      t.planned / 100 / period.fxRate,
-      t.actualToDate / 100 / period.fxRate,
-    ]);
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.aoa_to_sheet(rows),
-      `${c.code} ${c.name}`.replace(/[\\/?*[\]:]/g, "").slice(0, 31),
-    );
+  const sumRow = (o: string, oc: string, a: string, label: string, s: Summary): Cell[] => [
+    o,
+    oc,
+    a,
+    label,
+    k(s.planned),
+    k(s.actualToDate),
+    k(s.remaining),
+    k(s.stillToSpend),
+    k(s.projectedBalance),
+    s.planned / 100 / period.fxRate,
+    s.actualToDate / 100 / period.fxRate,
+  ];
+  for (const o of tree) {
+    const ol = activityLabel(o.objective);
+    for (const oc of o.outcomes) {
+      const ocl = activityLabel(oc.outcome);
+      for (const a of oc.activities) {
+        const al = activityLabel(a.activity);
+        for (const l of a.lines) {
+          const s = lineSummary(l, data.events);
+          budget.push([
+            ol,
+            ocl,
+            al,
+            l.groupLabel ?? "",
+            l.description,
+            l.quantity,
+            l.quantityUnit,
+            k(l.unitCostCents),
+            l.duration,
+            l.durationUnit,
+            l.occurrences,
+            k(s.planned),
+            k(s.actualToDate),
+            k(s.remaining),
+            l.financePostedCents !== undefined ? k(l.financePostedCents) : "",
+          ]);
+          summary.push(sumRow(ol, ocl, al, l.description, s));
+        }
+        summary.push(
+          sumRow(ol, ocl, al, a.funded ? "ACTIVITY TOTAL" : "ACTIVITY TOTAL (unfunded)", a.summary),
+        );
+      }
+      summary.push(sumRow(ol, ocl, "", "OUTCOME TOTAL", oc.summary));
+    }
+    summary.push(sumRow(ol, "", "", "OBJECTIVE TOTAL", o.summary));
   }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Summary");
-  const lineById = new Map(lines.map((l) => [l.id, l]));
-  const evRows: (string | number)[][] = [
+  const grand = sumSummaries(tree.map((o) => o.summary));
+  budget.push([
+    "TOTAL",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    k(grand.planned),
+    k(grand.actualToDate),
+    k(grand.remaining),
+    "",
+  ]);
+  summary.push(sumRow("TOTAL", "", "", "", grand));
+
+  const lineById = new Map(data.lines.map((l) => [l.id, l]));
+  const actById = new Map(data.activities.map((a) => [a.id, a]));
+  const ocById = new Map(data.outcomes.map((o) => [o.id, o]));
+  const objById = new Map(data.objectives.map((o) => [o.id, o]));
+  const events: Cell[][] = [
     [
+      "Objective",
+      "Outcome",
+      "Activity",
       "Line",
       "#",
       "Title",
@@ -198,9 +244,15 @@ export function exportWorkbook(
       "Notes",
     ],
   ];
-  for (const e of events) {
+  for (const e of data.events) {
     const l = lineById.get(e.lineId);
-    evRows.push([
+    const a = l && actById.get(l.activityId);
+    const oc = a && ocById.get(a.outcomeId);
+    const o = oc && objById.get(oc.objectiveId);
+    events.push([
+      o ? activityLabel(o) : "",
+      oc ? activityLabel(oc) : "",
+      a ? activityLabel(a) : "",
       l?.description ?? "",
       e.sequence,
       e.title,
@@ -211,10 +263,18 @@ export function exportWorkbook(
       e.actualUnitCostCents !== undefined ? k(e.actualUnitCostCents) : "",
       e.actualDuration ?? "",
       e.location ?? "",
-      attachments.filter((a) => a.eventId === e.id).length,
+      attachments.filter((x) => x.eventId === e.id).length,
       e.notes ?? "",
     ]);
   }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(evRows), "Events");
+  return { budget, summary, events };
+}
+
+export function exportWorkbook(period: BudgetPeriod, data: ExportData, attachments: Attachment[]) {
+  const sheets = buildExportSheets(period, data, attachments);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheets.budget), "Budget");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheets.summary), "Summary");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheets.events), "Events");
   XLSX.writeFile(wb, `${period.projectName} ${period.name} budget.xlsx`.replace(/[\\/]/g, "-"));
 }

@@ -2,6 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
+import { lineSummary, sumSummaries } from "@/lib/calc";
+import { LineEditor } from "@/components/app/line-editor";
+import { Money } from "@/components/app/currency";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  useBudgetData,
   useAddIndicators,
   useAddResponsibles,
   useRemoveIndicator,
@@ -113,6 +117,7 @@ function ActivityPage() {
         siteCount={siteIds.length}
         canEdit={canEdit}
       />
+      <BudgetCard activityId={id} canEdit={canEdit} />
       <IndicatorsCard activityId={id} rows={indicators} canEdit={canEdit} />
       <ResponsibleCard activityId={id} rows={responsibles} canEdit={canEdit} />
       <SitesCard
@@ -123,6 +128,62 @@ function ActivityPage() {
         canEdit={canEdit}
       />
     </div>
+  );
+}
+
+function BudgetCard({ activityId, canEdit }: { activityId: string; canEdit: boolean }) {
+  const d = useBudgetData();
+  const [adding, setAdding] = useState(false);
+  const lines = d.lines
+    .filter((l) => l.activityId === activityId)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+  const total = sumSummaries(lines.map((l) => lineSummary(l, d.events)));
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+        <div>
+          <CardTitle className="text-base">Budget</CardTitle>
+          <CardDescription>
+            {lines.length
+              ? `${lines.length} line${lines.length === 1 ? "" : "s"}`
+              : "No budget lines. This activity is unfunded."}
+          </CardDescription>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!canEdit}
+          title={canEdit ? undefined : CLOSED_HINT}
+          onClick={() => setAdding(true)}
+        >
+          <Plus className="h-4 w-4" />
+          Add line
+        </Button>
+      </CardHeader>
+      {lines.length > 0 && (
+        <CardContent className="space-y-1">
+          <ul className="divide-y text-sm">
+            {lines.map((l) => (
+              <li key={l.id} className="flex items-center justify-between gap-3 py-1.5">
+                <Link
+                  to="/budget/lines/$id"
+                  params={{ id: l.id }}
+                  className="min-w-0 truncate text-primary hover:underline"
+                >
+                  {l.description}
+                </Link>
+                <Money cents={lineSummary(l, d.events).planned} />
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
+            <span>Planned total</span>
+            <Money cents={total.planned} size="md" />
+          </div>
+        </CardContent>
+      )}
+      <LineEditor open={adding} onOpenChange={setAdding} activityId={activityId} />
+    </Card>
   );
 }
 

@@ -4,7 +4,6 @@ import {
   adminRepo,
   attachmentRepo,
   auditRepo,
-  componentRepo,
   eventRepo,
   lineRepo,
   periodRepo,
@@ -20,8 +19,6 @@ const key = (name: string) => ["pbt", activeStudyId(), activePeriodId() ?? "none
 
 export const usePeriod = () =>
   useQuery({ queryKey: key("period"), queryFn: () => periodRepo.get() });
-export const useComponents = () =>
-  useQuery({ queryKey: key("components"), queryFn: () => componentRepo.list() });
 export const useLines = () => useQuery({ queryKey: key("lines"), queryFn: () => lineRepo.list() });
 export const useEvents = () =>
   useQuery({ queryKey: key("events"), queryFn: () => eventRepo.list() });
@@ -48,15 +45,17 @@ export const useStudyMembers = (studyId: string) =>
 /** All budget data at once; `ready` is false until every query resolves. */
 export function useBudgetData() {
   const period = usePeriod(),
-    components = useComponents(),
+    workplan = useWorkplan(),
     lines = useLines(),
     events = useEvents(),
     attachments = useAttachments();
-  const ready = [period, components, lines, events, attachments].every((q) => q.isSuccess);
+  const ready = [period, workplan, lines, events, attachments].every((q) => q.isSuccess);
   return {
     ready,
     period: period.data ?? null,
-    components: components.data ?? [],
+    objectives: workplan.data?.objectives ?? [],
+    outcomes: workplan.data?.outcomes ?? [],
+    activities: workplan.data?.activities ?? [],
     lines: lines.data ?? [],
     events: events.data ?? [],
     attachments: attachments.data ?? [],
@@ -97,7 +96,8 @@ export const useCreateYear = () =>
       studyId: string;
       value: Parameters<typeof yearRepo.create>[1];
       copyFromId: string | null;
-    }) => yearRepo.create(a.studyId, a.value, a.copyFromId),
+      copyBudgetLines?: boolean;
+    }) => yearRepo.create(a.studyId, a.value, a.copyFromId, a.copyBudgetLines),
   );
 export const useSetYearStatus = () =>
   useYearM((a: { id: string; status: "open" | "closed" }) => yearRepo.setStatus(a.id, a.status));
@@ -160,12 +160,6 @@ export const useRenameSite = () =>
   useM((a: { id: string; name: string }) => siteRepo.rename(a.id, a.name));
 export const useArchiveSite = () =>
   useM((a: { id: string; archived: boolean }) => siteRepo.setArchived(a.id, a.archived));
-export const useCreateComponent = () => useM(componentRepo.create);
-export const useUpdateComponent = () =>
-  useM((a: { id: string; patch: Parameters<typeof componentRepo.update>[1] }) =>
-    componentRepo.update(a.id, a.patch),
-  );
-export const useRemoveComponent = () => useM(componentRepo.remove);
 export const useCreateLine = () => useM(lineRepo.create);
 export const useUpdateLine = () =>
   useM((a: { id: string; patch: Parameters<typeof lineRepo.update>[1] }) =>
@@ -186,7 +180,10 @@ export const useAddAttachment = () =>
     attachmentRepo.add(a.eventId, a.file, a.label),
   );
 export const useRemoveAttachment = () => useM(attachmentRepo.remove);
-export const useImportLines = () => useM(adminRepo.importLines);
+export const useImportLines = () =>
+  useM((a: { activityId: string; rows: Parameters<typeof adminRepo.importLines>[1] }) =>
+    adminRepo.importLines(a.activityId, a.rows),
+  );
 
 export function useCreateStudy() {
   const qc = useQueryClient();

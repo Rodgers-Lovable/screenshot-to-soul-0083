@@ -56,18 +56,14 @@ import { formatKES, kesToCents, todayISO } from "@/lib/format";
 import { clamp, daysBetween, periodSummary } from "@/lib/calc";
 import { Progress } from "@/components/ui/progress";
 import { Money } from "@/components/app/currency";
-import {
-  DURATION_UNITS,
-  QUANTITY_UNITS,
-  type BudgetPeriod,
-  type DurationUnit,
-  type QuantityUnit,
-} from "@/lib/types";
+import { DURATION_UNITS, QUANTITY_UNITS, type BudgetPeriod } from "@/lib/types";
+import { activityOptions, unitSuggestions } from "@/lib/budget-tree";
+import { ActivityPicker, UnitInput } from "@/components/app/budget-fields";
 import { PageHeader } from "@/components/app/shell";
 import { TeamPanel } from "@/components/app/team-panel";
 import { useYear } from "@/components/app/active-year-context";
 import { CreateYearDialog } from "@/components/app/create-year-dialog";
-import { validateYear } from "@/lib/workplan";
+import { prefillYearDates, validateYear } from "@/lib/workplan";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -143,10 +139,10 @@ function PeriodForm() {
     currency: "KES",
     status: "open",
   };
-  const [v, setV] = useState<BudgetPeriod>(period ?? blank);
+  const [v, setV] = useState<BudgetPeriod>(() => prefillYearDates(period ?? blank, todayISO()));
   const [confirmFx, setConfirmFx] = useState(false);
   useEffect(() => {
-    if (period) setV(period);
+    if (period) setV(prefillYearDates(period, todayISO()));
   }, [period]);
   const readOnly = !isAdmin || closed || !year;
   const anyDone = events.some((e) => e.status === "done");
@@ -210,6 +206,12 @@ function PeriodForm() {
               </div>
               {field("currency", "Currency code")}
             </div>
+            {period && (!period.startDate || !period.endDate) && (
+              <p className="text-xs text-muted-foreground">
+                The dates shown are the suggested financial year, 30 September to 29 September. They
+                are not saved until you save the year.
+              </p>
+            )}
             {!readOnly && problem && v.name && v.startDate && v.endDate && (
               <p className="text-sm text-destructive">{problem}</p>
             )}
@@ -514,16 +516,34 @@ function SitesPanel() {
   );
 }
 
-const NEW = "__new";
 function ImportPanel() {
-  const { components } = useBudgetData();
+  const { objectives, outcomes, activities, lines } = useBudgetData();
   const { canEdit } = useYear();
   const imp = useImportLines();
-  const [blocks, setBlocks] = useState<
-    (ParsedBlock & { componentId: string; newName: string; group: string })[]
-  >([]);
+  const [activityId, setActivityId] = useState("");
+  const [blocks, setBlocks] = useState<(ParsedBlock & { group: string })[]>([]);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
+  const options = useMemo(
+    () => activityOptions({ objectives, outcomes, activities }),
+    [objectives, outcomes, activities],
+  );
+  const qtyUnits = useMemo(
+    () =>
+      unitSuggestions(
+        QUANTITY_UNITS,
+        lines.map((l) => l.quantityUnit),
+      ),
+    [lines],
+  );
+  const durUnits = useMemo(
+    () =>
+      unitSuggestions(
+        DURATION_UNITS,
+        lines.map((l) => l.durationUnit),
+      ),
+    [lines],
+  );
 
   async function onFile(file?: File) {
     if (!file) return;
@@ -537,9 +557,7 @@ function ImportPanel() {
       }
       setFileName(file.name);
       setRows(parsed.rows);
-      setBlocks(
-        parsed.blocks.map((b) => ({ ...b, componentId: NEW, newName: b.heading, group: "" })),
-      );
+      setBlocks(parsed.blocks.map((b) => ({ ...b, group: b.heading })));
     } catch {
       toast.error("Couldn't read that file. Upload an .xlsx workbook.");
     }
@@ -552,30 +570,27 @@ function ImportPanel() {
     const payload = rows.map((r) => {
       const b = blocks.find((x) => x.index === r.block)!;
       return {
-        component:
-          b.componentId === NEW
-            ? { name: b.newName.trim() || "Imported" }
-            : { id: b.componentId, name: "" },
-        line: {
-          description: r.description,
-          groupLabel: b.group.trim() || undefined,
-          quantity: r.quantity,
-          quantityUnit: r.quantityUnit,
-          unitCostCents: kesToCents(r.unitCost),
-          duration: r.duration,
-          durationUnit: r.durationUnit,
-          occurrences: r.occurrences,
-        },
+        description: r.description,
+        groupLabel: b.group.trim() || undefined,
+        quantity: r.quantity,
+        quantityUnit: r.quantityUnit,
+        unitCostCents: kesToCents(r.unitCost),
+        duration: r.duration,
+        durationUnit: r.durationUnit,
+        occurrences: r.occurrences,
       };
     });
-    imp.mutate(payload, {
-      onSuccess: (n) => {
-        toast.success(`Imported ${n} line(s)`);
-        setRows([]);
-        setBlocks([]);
-        setFileName("");
+    imp.mutate(
+      { activityId, rows: payload },
+      {
+        onSuccess: (n) => {
+          toast.success(`Imported ${n} line(s)`);
+          setRows([]);
+          setBlocks([]);
+          setFileName("");
+        },
       },
-    });
+    );
   }
   const numCell = (
     i: number,
@@ -597,8 +612,8 @@ function ImportPanel() {
       <CardHeader>
         <CardTitle className="text-base">Import from Excel</CardTitle>
         <CardDescription>
-          Upload an .xlsx budget. Rows without numbers become block headings; you choose which
-          component each block goes into.
+          Upload an .xlsx budget and choose the one activity every row is added to. Rows without
+          numbers become group labels you can edit.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -607,6 +622,21 @@ function ImportPanel() {
             Import is off because there is no open year to import into.
           </p>
         )}
+        <div className="max-w-md space-y-1">
+          <Label>Add the lines to this activity</Label>
+          <ActivityPicker
+            value={activityId}
+            onChange={setActivityId}
+            options={options}
+            disabled={!canEdit}
+            label="Import into activity"
+          />
+          {!options.length && canEdit && (
+            <p className="text-xs text-muted-foreground">
+              This year has no activities. Add one under Activities first.
+            </p>
+          )}
+        </div>
         <Label
           className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${canEdit ? "cursor-pointer hover:bg-muted" : "pointer-events-none opacity-50"}`}
         >
@@ -624,45 +654,6 @@ function ImportPanel() {
           <div key={b.index} className="rounded-md border">
             <div className="flex flex-wrap items-end gap-3 border-b bg-muted/50 p-3">
               <p className="mr-auto font-medium">{b.heading}</p>
-              <div className="space-y-1">
-                <Label className="text-xs">Component</Label>
-                <Select
-                  value={b.componentId}
-                  onValueChange={(v) =>
-                    setBlocks((all) =>
-                      all.map((x) => (x.index === b.index ? { ...x, componentId: v } : x)),
-                    )
-                  }
-                >
-                  <SelectTrigger className="h-8 w-56">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NEW}>New component…</SelectItem>
-                    {components.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.code}. {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {b.componentId === NEW && (
-                <div className="space-y-1">
-                  <Label className="text-xs">New component name</Label>
-                  <Input
-                    className="h-8 w-56"
-                    value={b.newName}
-                    onChange={(e) =>
-                      setBlocks((all) =>
-                        all.map((x) =>
-                          x.index === b.index ? { ...x, newName: e.target.value } : x,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-              )}
               <div className="space-y-1">
                 <Label className="text-xs">Group (optional)</Label>
                 <Input
@@ -704,19 +695,21 @@ function ImportPanel() {
                         </td>
                         <td>{numCell(i, "quantity", r.quantity)}</td>
                         <td>
-                          <MiniSelect
+                          <UnitInput
+                            aria-label="Unit"
                             value={r.quantityUnit}
-                            opts={QUANTITY_UNITS}
-                            onChange={(v) => setRow(i, { quantityUnit: v as QuantityUnit })}
+                            suggestions={qtyUnits}
+                            onChange={(v) => setRow(i, { quantityUnit: v })}
                           />
                         </td>
                         <td>{numCell(i, "unitCost", r.unitCost)}</td>
                         <td>{numCell(i, "duration", r.duration)}</td>
                         <td>
-                          <MiniSelect
+                          <UnitInput
+                            aria-label="Duration unit"
                             value={r.durationUnit}
-                            opts={DURATION_UNITS}
-                            onChange={(v) => setRow(i, { durationUnit: v as DurationUnit })}
+                            suggestions={durUnits}
+                            onChange={(v) => setRow(i, { durationUnit: v })}
                           />
                         </td>
                         <td>{numCell(i, "occurrences", r.occurrences)}</td>
@@ -739,37 +732,12 @@ function ImportPanel() {
           </div>
         ))}
         {rows.length > 0 && (
-          <Button onClick={confirm} disabled={imp.isPending || !canEdit}>
+          <Button onClick={confirm} disabled={imp.isPending || !canEdit || !activityId}>
             Import {rows.length} line(s)
           </Button>
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function MiniSelect({
-  value,
-  opts,
-  onChange,
-}: {
-  value: string;
-  opts: readonly string[];
-  onChange: (v: string) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-24">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {opts.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -780,16 +748,14 @@ function ExportPanel() {
       <CardHeader>
         <CardTitle className="text-base">Export to Excel</CardTitle>
         <CardDescription>
-          One sheet per component, a summary sheet with carryover per line and component, and an
-          events sheet.
+          A budget sheet and a summary sheet grouped by objective, outcome and activity, with
+          carryover per line, and an events sheet.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Button
           disabled={!d.period}
-          onClick={() =>
-            d.period && exportWorkbook(d.period, d.components, d.lines, d.events, d.attachments)
-          }
+          onClick={() => d.period && exportWorkbook(d.period, d, d.attachments)}
         >
           <Download className="h-4 w-4" />
           Download .xlsx
@@ -800,7 +766,7 @@ function ExportPanel() {
 }
 
 function PeriodGlance() {
-  const { period, components, lines, events } = useBudgetData();
+  const { period, activities, lines, events } = useBudgetData();
   const { data: audit = [] } = useAudit();
   const total = useMemo(() => periodSummary(lines, events), [lines, events]);
   const lastChange = useMemo(
@@ -817,7 +783,7 @@ function PeriodGlance() {
   const span = Math.max(daysBetween(period.startDate, period.endDate), 1);
   const elapsed = clamp(daysBetween(period.startDate, today), 0, span);
   const counts: [string, number][] = [
-    ["Components", components.length],
+    ["Activities", activities.length],
     ["Lines", lines.length],
     ["Events", events.length],
   ];

@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarClock, ChevronRight, Info, Pencil } from "lucide-react";
+import { ArrowLeft, CalendarClock, ChevronRight, Info, MoveRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,8 @@ import { formulaShort, kesToCents, pct, todayISO } from "@/lib/format";
 import { Money, useFmt } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
+import { MoveLineDialog } from "@/components/app/move-line-dialog";
+import { activityLabel } from "@/lib/budget-tree";
 import { useRecord } from "@/components/app/shell";
 import { useYear } from "@/components/app/active-year-context";
 import { Truncated } from "@/components/app/truncated";
@@ -42,6 +44,7 @@ function LineDetail() {
   const { canEdit } = useYear();
   const [edit, setEdit] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [moving, setMoving] = useState(false);
   const line = d.lines.find((l) => l.id === id);
   const events = useMemo(
     () => d.events.filter((e) => e.lineId === id).sort((a, b) => a.sequence - b.sequence),
@@ -58,7 +61,7 @@ function LineDetail() {
         </Link>
       </p>
     );
-  const comp = d.components.find((c) => c.id === line.componentId);
+  const act = d.activities.find((a) => a.id === line.activityId);
   const today = todayISO();
 
   return (
@@ -75,10 +78,16 @@ function LineDetail() {
             <ArrowLeft className="h-4 w-4" />
             Budget
           </Link>
-          {comp && (
+          {act && (
             <>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <Truncated text={`${comp.code}. ${comp.name}`} className="max-w-xs" />
+              <Link
+                to="/activities/$id"
+                params={{ id: act.id }}
+                className="min-w-0 hover:text-foreground"
+              >
+                <Truncated text={activityLabel(act)} className="max-w-xs" />
+              </Link>
             </>
           )}
           {line.groupLabel && (
@@ -117,6 +126,10 @@ function LineDetail() {
                 Schedule
               </Button>
             )}
+            <Button variant="outline" disabled={!canEdit} onClick={() => setMoving(true)}>
+              <MoveRight className="h-4 w-4" />
+              Move
+            </Button>
             <Button variant="outline" disabled={!canEdit} onClick={() => setEdit(true)}>
               <Pencil className="h-4 w-4" />
               Edit line
@@ -222,6 +235,7 @@ function LineDetail() {
 
       <FinanceCard lineId={line.id} posted={line.financePostedCents} reported={s.actualToDate} />
       <LineEditor open={edit} onOpenChange={setEdit} line={line} />
+      <MoveLineDialog line={moving ? line : null} onClose={() => setMoving(false)} />
       <ScheduleDialog
         line={scheduling ? line : null}
         events={events}

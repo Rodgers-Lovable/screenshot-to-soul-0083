@@ -4,12 +4,17 @@ import type {
   BudgetEvent,
   BudgetLine,
   BudgetPeriod,
-  Component,
+  Objective,
+  Outcome,
+  Activity,
 } from "@/lib/types";
 
 export interface StoreData {
   period: BudgetPeriod | null;
-  components: Component[];
+  /** The year's workplan, read only here. It is written through the workplan repository. */
+  objectives: Objective[];
+  outcomes: Outcome[];
+  activities: Activity[];
   lines: BudgetLine[];
   events: BudgetEvent[];
   attachments: Attachment[];

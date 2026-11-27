@@ -182,9 +182,6 @@ export function frequencyText(label: string, every?: number, unit?: RepeatUnit):
   return label || (rule ? rule[0]!.toUpperCase() + rule.slice(1) : "");
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-const parse = (s: string) => new Date(`${s}T00:00:00Z`);
-
 /** A short label for a year's dates, such as "2027" or "2026/2027". */
 export function yearLabel(startDate: string, endDate: string): string {
   const a = startDate.slice(0, 4);
@@ -192,24 +189,55 @@ export function yearLabel(startDate: string, endDate: string): string {
   return a === b ? a : `${a}/${b}`;
 }
 
-/** Dates for the year after `prev`: it starts the next day and lasts as long. */
-export function suggestNextYear(prev: { startDate: string; endDate: string }): {
+export interface YearDates {
   name: string;
   startDate: string;
   endDate: string;
-} | null {
-  if (!isoDate.test(prev.startDate) || !isoDate.test(prev.endDate)) return null;
-  const start = parse(prev.endDate);
-  start.setUTCDate(start.getUTCDate() + 1);
-  const days = Math.round(
-    (parse(prev.endDate).getTime() - parse(prev.startDate).getTime()) / 864e5,
-  );
-  const end = new Date(start);
-  if (days >= 359 && days <= 366) {
-    end.setUTCFullYear(end.getUTCFullYear() + 1);
-    end.setUTCDate(end.getUTCDate() - 1);
-  } else end.setUTCDate(end.getUTCDate() + days);
-  return { name: yearLabel(iso(start), iso(end)), startDate: iso(start), endDate: iso(end) };
+}
+const pad = (n: number) => String(n).padStart(2, "0");
+const fyName = (startYear: number) => `FY ${startYear}/${pad((startYear + 1) % 100)}`;
+const fyOf = (startYear: number): YearDates => ({
+  name: fyName(startYear),
+  startDate: `${startYear}-09-30`,
+  endDate: `${startYear + 1}-09-29`,
+});
+
+/** The financial year (30 September to 29 September) holding a date. Null if the date is invalid. */
+export function financialYearContaining(date: string): YearDates | null {
+  if (!isoDate.test(date)) return null;
+  const y = Number(date.slice(0, 4));
+  return fyOf(date.slice(5) >= "09-30" ? y : y - 1);
+}
+
+/** The first financial year that starts after the given year ends, so it never overlaps. */
+export function nextFinancialYearAfter(prev: { endDate: string }): YearDates | null {
+  const cur = financialYearContaining(prev.endDate);
+  return cur ? fyOf(Number(cur.startDate.slice(0, 4)) + 1) : null;
+}
+
+/** Fills a blank start or end with the matching financial year. Nothing is saved by this. */
+export function prefillYearDates<T extends { startDate: string; endDate: string }>(
+  y: T,
+  today: string,
+): T {
+  if (isoDate.test(y.startDate) && isoDate.test(y.endDate)) return y;
+  const fy =
+    financialYearContaining(isoDate.test(y.startDate) ? y.startDate : y.endDate) ??
+    financialYearContaining(today);
+  if (!fy) return y;
+  return {
+    ...y,
+    startDate: isoDate.test(y.startDate) ? y.startDate : fy.startDate,
+    endDate: isoDate.test(y.endDate) ? y.endDate : fy.endDate,
+  };
+}
+
+/** Start and end for a new year: the financial year of today, or the one after the latest year. */
+export function defaultNewYear(years: Span[], today: string): YearDates | null {
+  const latest = [...years]
+    .filter(dated)
+    .sort((a, b) => b.endDate.localeCompare(a.endDate) || b.id.localeCompare(a.id))[0];
+  return latest ? nextFinancialYearAfter(latest) : financialYearContaining(today);
 }
 
 /** The editable fields of an activity. */

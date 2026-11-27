@@ -20,7 +20,9 @@ import {
 } from "@/components/ui/select";
 import { useCreateYear } from "@/data/hooks";
 import type { BudgetPeriod } from "@/lib/types";
-import { suggestNextYear, validateYear } from "@/lib/workplan";
+import { todayISO } from "@/lib/format";
+import { defaultNewYear, validateYear } from "@/lib/workplan";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useActiveStudy } from "./active-study-context";
 import { useYear } from "./active-year-context";
 
@@ -58,8 +60,9 @@ function YearForm({ years, onDone }: { years: BudgetPeriod[]; onDone: () => void
     () => [...years].sort((a, b) => b.startDate.localeCompare(a.startDate))[0],
     [years],
   );
-  const next = latest ? suggestNextYear(latest) : null;
+  const next = defaultNewYear(years, todayISO());
   const [from, setFrom] = useState(latest ? latest.id : BLANK);
+  const [withLines, setWithLines] = useState(false);
   const [v, setV] = useState({
     name: next?.name ?? "",
     startDate: next?.startDate ?? "",
@@ -76,6 +79,7 @@ function YearForm({ years, onDone }: { years: BudgetPeriod[]; onDone: () => void
         studyId: study.id,
         value: { ...v, name: v.name.trim(), currency: v.currency.trim().toUpperCase() },
         copyFromId: from === BLANK ? null : from,
+        copyBudgetLines: from !== BLANK && withLines,
       },
       {
         onSuccess: (id) => {
@@ -108,8 +112,25 @@ function YearForm({ years, onDone }: { years: BudgetPeriod[]; onDone: () => void
           </Select>
           <p className="text-xs text-muted-foreground">
             Copies objectives, outcomes, activities, indicators, responsible people and site
-            choices. Spending, evidence and budget lines are never copied.
+            choices.
           </p>
+          {from !== BLANK && (
+            <div className="flex items-start gap-2 pt-1">
+              <Checkbox
+                id="year-copy-lines"
+                checked={withLines}
+                onCheckedChange={(c) => setWithLines(c === true)}
+                className="mt-0.5"
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="year-copy-lines">Include budget lines</Label>
+                <p className="text-xs text-muted-foreground">
+                  Copies each line with fresh planned records. Spending, actuals, finance postings
+                  and evidence are not copied.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
       <div className="space-y-1">

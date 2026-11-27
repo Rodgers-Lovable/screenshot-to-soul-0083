@@ -1,6 +1,6 @@
 # Study Budget Tracker
 
-Tracks a project budget in Kenyan shillings. Plan each year's objectives, outcomes and activities, plan components and budget lines, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
+Tracks a project budget in Kenyan shillings. Plan each year's objectives, outcomes and activities, put budget lines under each activity, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
 
 Built with TanStack Start, React 19, Tailwind v4 and shadcn/ui. Data, sign-in and evidence files live in a Supabase project.
 
@@ -48,9 +48,10 @@ On their first visit, each team member gets a short tour of the Dashboard, Activ
 Each study plans and budgets by year. A year (Settings, Years) has its own dates, exchange rate, currency, workplan and budget. The year switcher in the header changes which year every page shows; the choice is remembered per study.
 
 - Only study admins create years, edit a year's dates and exchange rate, close or reopen a year, and manage the study's site list (Settings, Sites). A study with no year asks an admin to create the first one.
-- Start a new year blank, or from an earlier year. Copying brings over objectives, outcomes, activities, indicators, responsible people and site choices. It never copies budget lines, spending, receipts or evidence. Years cannot overlap.
+- Start a new year blank, or from an earlier year. New years default to the financial year, 30 September to 29 September, and the dates stay editable. Copying brings over objectives, outcomes, activities, indicators, responsible people and site choices. Tick Include budget lines to copy the lines too, each with fresh planned records. Spending, actuals, finance postings, receipts and evidence are never copied. Years cannot overlap.
 - A closed year is read-only for everyone: workplan, budget lines, spending, actuals and evidence. The database enforces this, not just the screens. Only an admin can reopen it, and both actions go in the audit log.
-- Pages: Activities (`/activities`) is the workplan tree, with a detail page per activity (`/activities/:id`) for indicators, responsible people and sites. Spending (`/spending`) is the old Events page; `/events` links still redirect to it.
+- Every budget line belongs to one activity. The Budget page groups lines by objective, outcome and activity with subtotals; activities without lines show as unfunded. A line can be moved to another activity of the same year, never to another year. An activity that has lines cannot be deleted until its lines are moved. Units are free text, with suggestions from standard values and the ones already used in the year.
+- Pages: Activities (`/activities`) is the workplan tree, with a detail page per activity (`/activities/:id`) for budget lines, indicators, responsible people and sites. Spending (`/spending`) is the old Events page; `/events` links still redirect to it.
 
 ## Scripts
 
