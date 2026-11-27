@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +32,7 @@ export function MoveLineDialog({
     [objectives, outcomes, activities],
   );
   const options = useMemo(() => activityOptions(chain), [chain]);
-  useEffect(() => setTarget(""), [line?.id]);
+  useOnChange(line?.id, () => setTarget(""));
   const problem = line && target ? validateLineMove(line, target, chain) : null;
   return (
     <Dialog open={!!line} onOpenChange={(o) => !o && onClose()}>

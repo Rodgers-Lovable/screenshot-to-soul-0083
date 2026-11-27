@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { AlertTriangle, CheckCircle2, Circle, CircleDot, Layers, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -329,9 +330,9 @@ export function ActivityDialog({
   pending?: boolean;
 }) {
   const [v, setV] = useState<ActivityFormValue>(blankActivity);
-  useEffect(() => {
-    if (!open) setV(blankActivity);
-  }, [open]);
+  useOnChange(open, (isOpen) => {
+    if (isOpen) setV(blankActivity);
+  });
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-xl">

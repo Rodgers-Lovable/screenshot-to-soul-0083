@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { toast } from "sonner";
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react";
 import { lineSummary, sumSummaries } from "@/lib/calc";
@@ -608,7 +609,7 @@ function SitesCard({
   const set = useSetActivitySites();
   const [pick, setPick] = useState<Set<string>>(new Set(selected));
   const key = selected.slice().sort().join(",");
-  useEffect(() => setPick(new Set(selected)), [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useOnChange(key, () => setPick(new Set(selected)));
   const list = useMemo(
     () =>
       sites

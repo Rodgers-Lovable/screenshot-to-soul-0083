@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, Lock } from "lucide-react";
@@ -57,13 +57,17 @@ export function ScheduleDialog({
   const [repeat, setRepeat] = useState("1m");
   const [custom, setCustom] = useState<Record<number, string>>({});
 
-  useEffect(() => {
-    if (!line) return;
-    const firstDated = sorted.find((e) => e.plannedDate)?.plannedDate;
-    setFirst(firstDated ?? period?.startDate ?? todayISO());
-    setMode(sorted.length > 1 ? "repeat" : "custom");
-    setCustom(Object.fromEntries(sorted.map((e) => [e.sequence, e.plannedDate ?? ""])));
-  }, [line?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Start fresh each time the dialog opens for a line.
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  if ((line?.id ?? null) !== openFor) {
+    setOpenFor(line?.id ?? null);
+    if (line) {
+      const firstDated = sorted.find((e) => e.plannedDate)?.plannedDate;
+      setFirst(firstDated ?? period?.startDate ?? todayISO());
+      setMode(sorted.length > 1 ? "repeat" : "custom");
+      setCustom(Object.fromEntries(sorted.map((e) => [e.sequence, e.plannedDate ?? ""])));
+    }
+  }
 
   const generated = useMemo(() => {
     const rule = REPEATS[repeat]?.r;

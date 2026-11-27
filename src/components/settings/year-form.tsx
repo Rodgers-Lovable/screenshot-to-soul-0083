@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,9 +40,9 @@ export function PeriodForm() {
   };
   const [v, setV] = useState<BudgetPeriod>(() => prefillYearDates(period ?? blank, todayISO()));
   const [confirmFx, setConfirmFx] = useState(false);
-  useEffect(() => {
-    if (period) setV(prefillYearDates(period, todayISO()));
-  }, [period]);
+  useOnChange(period, (p) => {
+    if (p) setV(prefillYearDates(p, todayISO()));
+  });
   const readOnly = !isAdmin || closed || !year;
   const anyDone = events.some((e) => e.status === "done");
   const problem = validateYear(

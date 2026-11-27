@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { toast } from "sonner";
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -477,9 +478,7 @@ function DeleteLineDialog({
   const rm = useRemoveLine();
   const [typed, setTyped] = useState("");
   const ok = !hasDone || typed.trim() === line?.description;
-  useEffect(() => {
-    setTyped("");
-  }, [line?.id]);
+  useOnChange(line?.id, () => setTyped(""));
   return (
     <Dialog
       open={!!line}

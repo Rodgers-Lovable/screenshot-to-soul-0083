@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useEffectEvent, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -132,9 +132,12 @@ export function LineEditor({
     resolver: zodResolver(schema),
     defaultValues: defaults(),
   });
+  // Reset only when the dialog opens or switches line, not on every render.
+  const resetForm = useEffectEvent(() => form.reset(defaults()));
+  const lineId = line?.id;
   useEffect(() => {
-    if (open) form.reset(defaults());
-  }, [open, line?.id, activityId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (open) resetForm();
+  }, [open, lineId, activityId]);
   const w = useWatch({ control: form.control });
 
   const preview = useMemo(() => {
