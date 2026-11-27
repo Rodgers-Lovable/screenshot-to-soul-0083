@@ -150,6 +150,9 @@ function SignIn() {
         >
           {mode === "in" ? "No account yet? Sign up" : "Have an account? Sign in"}
         </button>
+        <a href="/help" className="block text-sm text-muted-foreground underline">
+          Read the user manual
+        </a>
       </div>
     </div>
   );
