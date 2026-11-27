@@ -826,11 +826,20 @@ function Calendar({
               className={cn(
                 "min-h-24 border-b border-r p-1",
                 day.getMonth() !== month.getMonth() && "bg-muted/40",
-                k === today && "bg-accent/40",
+                k === today && "bg-primary/30",
               )}
+              aria-current={k === today ? "date" : undefined}
             >
-              <div className="mb-1 text-right tabular-nums text-muted-foreground">
-                {day.getDate()}
+              <div className="mb-1 flex justify-end">
+                <span
+                  className={cn(
+                    "tabular-nums text-muted-foreground",
+                    k === today &&
+                      "flex size-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground",
+                  )}
+                >
+                  {day.getDate()}
+                </span>
               </div>
               <div className="space-y-1">
                 {list.map(({ e, flags }) => (
