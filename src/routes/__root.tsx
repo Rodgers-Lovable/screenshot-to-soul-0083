@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
   type ErrorComponentProps,
@@ -133,21 +134,27 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  // The user manual is public, so people can read it before they have access.
+  const isPublic = useRouterState({ select: (s) => s.location.pathname === "/help" });
 
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <TooltipProvider delayDuration={200}>
-        {/* The sign-in session lives in the browser, so the app renders on the client only. */}
-        <ClientOnly
-          fallback={<div className="p-8 text-sm text-muted-foreground">Loading budget…</div>}
-        >
-          <AuthGate>
-            <AppShell>
-              <Outlet />
-            </AppShell>
-          </AuthGate>
-        </ClientOnly>
+        {isPublic ? (
+          <Outlet />
+        ) : (
+          /* The sign-in session lives in the browser, so the app renders on the client only. */
+          <ClientOnly
+            fallback={<div className="p-8 text-sm text-muted-foreground">Loading budget…</div>}
+          >
+            <AuthGate>
+              <AppShell>
+                <Outlet />
+              </AppShell>
+            </AuthGate>
+          </ClientOnly>
+        )}
         <Toaster richColors position="top-center" />
       </TooltipProvider>
     </QueryClientProvider>

@@ -43,6 +43,10 @@ The list has no client access, so the SQL Editor (or the service role) is the on
 
 On their first visit, each team member gets a short tour of the Dashboard, Activities, Budget, Spending and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
 
+## User manual
+
+The user manual lives in `docs/user-manual/README.md` and is served at `/help`, which needs no sign-in. The header's book icon, the sign-in screen and the Waiting for access screen link to it. Bump the manual version and revision history when you change it, then regenerate the screenshots and `public/user-manual.pdf` with the scripts in `docs/user-manual/capture/`.
+
 ## Workplan years
 
 Each study plans and budgets by year. A year (Settings, Years) has its own dates, exchange rate, currency, workplan and budget. The year switcher in the header changes which year every page shows; the choice is remembered per study.

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ActivitiesRouteImport } from './routes/activities'
 import { Route as BudgetRouteImport } from './routes/budget'
 import { Route as EventsRouteImport } from './routes/events'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SpendingRouteImport } from './routes/spending'
 import { Route as ActivitiesIdRouteImport } from './routes/activities_.$id'
@@ -38,6 +39,11 @@ const BudgetRoute = BudgetRouteImport.update({
 const EventsRoute = EventsRouteImport.update({
   id: '/events',
   path: '/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/activities': typeof ActivitiesRoute
   '/budget': typeof BudgetRoute
   '/events': typeof EventsRoute
+  '/help': typeof HelpRoute
   '/settings': typeof SettingsRoute
   '/spending': typeof SpendingRoute
   '/activities/$id': typeof ActivitiesIdRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/activities': typeof ActivitiesRoute
   '/budget': typeof BudgetRoute
   '/events': typeof EventsRoute
+  '/help': typeof HelpRoute
   '/settings': typeof SettingsRoute
   '/spending': typeof SpendingRoute
   '/activities/$id': typeof ActivitiesIdRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/activities': typeof ActivitiesRoute
   '/budget': typeof BudgetRoute
   '/events': typeof EventsRoute
+  '/help': typeof HelpRoute
   '/settings': typeof SettingsRoute
   '/spending': typeof SpendingRoute
   '/activities_/$id': typeof ActivitiesIdRoute
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/budget'
     | '/events'
+    | '/help'
     | '/settings'
     | '/spending'
     | '/activities/$id'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/budget'
     | '/events'
+    | '/help'
     | '/settings'
     | '/spending'
     | '/activities/$id'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/activities'
     | '/budget'
     | '/events'
+    | '/help'
     | '/settings'
     | '/spending'
     | '/activities_/$id'
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   ActivitiesRoute: typeof ActivitiesRoute
   BudgetRoute: typeof BudgetRoute
   EventsRoute: typeof EventsRoute
+  HelpRoute: typeof HelpRoute
   SettingsRoute: typeof SettingsRoute
   SpendingRoute: typeof SpendingRoute
   ActivitiesIdRoute: typeof ActivitiesIdRoute
@@ -188,6 +201,13 @@ declare module '@tanstack/react-router' {
       path: '/events'
       fullPath: '/events'
       preLoaderRoute: typeof EventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -240,6 +260,7 @@ const rootRouteChildren: RootRouteChildren = {
   ActivitiesRoute: ActivitiesRoute,
   BudgetRoute: BudgetRoute,
   EventsRoute: EventsRoute,
+  HelpRoute: HelpRoute,
   SettingsRoute: SettingsRoute,
   SpendingRoute: SpendingRoute,
   ActivitiesIdRoute: ActivitiesIdRoute,
