@@ -1,8 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarClock, ChevronRight, Info, MoveRight, Pencil } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  ChevronRight,
+  Info,
+  Loader2,
+  MoveRight,
+  Pencil,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -304,31 +313,46 @@ function FinanceCard({
       <CardContent className="grid gap-4 sm:grid-cols-4 sm:items-end">
         <div className="space-y-1">
           <Label htmlFor="fin">Finance-posted amount (KES)</Label>
-          <Input
-            id="fin"
-            disabled={!canEdit}
-            type="number"
-            step="any"
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            onBlur={() => {
-              const c = val === "" ? undefined : kesToCents(Number(val));
-              if (c !== posted)
-                upd.mutate(
-                  { id: lineId, patch: { financePostedCents: c } },
-                  { onSuccess: () => toast.success("Finance figure saved") },
-                );
-            }}
-          />
+          <div className="relative">
+            <Input
+              id="fin"
+              disabled={!canEdit || upd.isPending}
+              aria-busy={upd.isPending}
+              className={cn(upd.isPending && "pr-9")}
+              type="number"
+              step="any"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              onBlur={() => {
+                const c = val === "" ? undefined : kesToCents(Number(val));
+                if (c !== posted)
+                  upd.mutate(
+                    { id: lineId, patch: { financePostedCents: c } },
+                    { onSuccess: () => toast.success("Finance figure saved") },
+                  );
+              }}
+            />
+            {upd.isPending && (
+              <Loader2
+                className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                aria-hidden
+              />
+            )}
+          </div>
+          {upd.isPending && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Saving…
+            </p>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Reported actual</p>
-          <Money cents={reported} className="!items-start" />
+          <Money cents={reported} className="items-start!" />
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Difference (finance − reported)</p>
           {posted !== undefined ? (
-            <Money cents={p - reported} signed className="!items-start" />
+            <Money cents={p - reported} signed className="items-start!" />
           ) : (
             <span className="text-sm text-muted-foreground">—</span>
           )}
