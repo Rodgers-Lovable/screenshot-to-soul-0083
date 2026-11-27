@@ -32,7 +32,7 @@ import {
   useWorkplan,
 } from "@/data/hooks";
 import { eventFigures, eventPlanned } from "@/lib/calc";
-import { roundText } from "@/lib/deliveries";
+import { groupByRound, roundText } from "@/lib/deliveries";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { StatusChip } from "./chips";
@@ -80,7 +80,10 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const [deliveryId, setDeliveryId] = useState(ev.deliveryId ?? NO_DELIVERY);
   const wp = useWorkplan();
   const siteOf = (id?: string) => wp.data?.sites.find((x) => x.id === id)?.name;
-  const choices = data.deliveries.filter((x) => x.activityId === line.activityId);
+  const choices = groupByRound(
+    data.deliveries.filter((x) => x.activityId === line.activityId),
+    (id) => siteOf(id) ?? "",
+  ).flatMap((g) => g.items);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"save" | "done" | "cancel" | "reopen" | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
