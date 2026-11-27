@@ -1,4 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { AlertTriangle, CheckCircle2, Circle, CircleDot, Layers, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ import {
   type ActivityFormValue,
 } from "@/lib/workplan";
 import { cn } from "@/lib/utils";
+import { SELECT_NONE, fromSelect } from "@/lib/select";
 
 export function KindChip({ kind }: { kind: ActivityKind }) {
   const I = kind === "site" ? MapPin : Layers;
@@ -196,8 +198,6 @@ function CodeTitleForm({
   );
 }
 
-const NONE = "__none";
-
 /** All activity fields. Used by the add dialog and the detail page. */
 export function ActivityFields({
   value,
@@ -288,14 +288,14 @@ export function ActivityFields({
         <div className="space-y-1">
           <Label>Unit</Label>
           <Select
-            value={value.repeatUnit ?? NONE}
-            onValueChange={(u) => set({ repeatUnit: u === NONE ? undefined : (u as RepeatUnit) })}
+            value={value.repeatUnit ?? SELECT_NONE}
+            onValueChange={(u) => set({ repeatUnit: fromSelect(u) as RepeatUnit | undefined })}
           >
             <SelectTrigger aria-label="Repeat unit">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE}>No repeat rule</SelectItem>
+              <SelectItem value={SELECT_NONE}>No repeat rule</SelectItem>
               <SelectItem value="weeks">Weeks</SelectItem>
               <SelectItem value="months">Months</SelectItem>
             </SelectContent>
@@ -330,9 +330,9 @@ export function ActivityDialog({
   pending?: boolean;
 }) {
   const [v, setV] = useState<ActivityFormValue>(blankActivity);
-  useEffect(() => {
-    if (!open) setV(blankActivity);
-  }, [open]);
+  useOnChange(open, (isOpen) => {
+    if (isOpen) setV(blankActivity);
+  });
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-xl">

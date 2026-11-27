@@ -544,10 +544,8 @@ export async function signUrls(list: Attachment[]): Promise<Attachment[]> {
   );
 }
 
-// Study tables and RPCs are newer than the generated types, so they are called through untyped views.
-type RpcResult = PromiseLike<{ data: unknown; error: { message: string } | null }>;
-const rpc = (fn: string, args: object): RpcResult =>
-  (supabase.rpc as unknown as (f: string, a: object) => RpcResult).call(supabase, fn, args);
+// The column is free text in the database; anything but "admin" is treated as a plain member.
+const studyRole = (role: string): StudyRole => (role === "admin" ? "admin" : "member");
 
 async function mySession() {
   const { data } = await supabase.auth.getSession();
@@ -558,27 +556,22 @@ export async function listStudies(): Promise<Study[]> {
   const me = await mySession();
   if (!me) return [];
   const [studies, members] = await Promise.all([
-    from("studies")
-      .select("id,name")
-      .order("created_at" as never),
-    from("study_members")
-      .select("study_id,role")
-      .eq("user_id" as never, me.id),
+    supabase.from("studies").select("id,name").order("created_at"),
+    supabase.from("study_members").select("study_id,role").eq("user_id", me.id),
   ]);
   if (studies.error) throw new Error(studies.error.message);
   if (members.error) throw new Error(members.error.message);
-  const roles = new Map(
-    (members.data as unknown as Obj[]).map((m) => [m.study_id as string, m.role]),
-  );
-  return (studies.data as unknown as { id: string; name: string }[])
-    .filter((s) => roles.has(s.id))
-    .map((s) => ({ id: s.id, name: s.name, role: roles.get(s.id) as StudyRole }));
+  const roles = new Map(members.data.map((m) => [m.study_id, studyRole(m.role)]));
+  return studies.data.flatMap((s) => {
+    const role = roles.get(s.id);
+    return role ? [{ id: s.id, name: s.name, role }] : [];
+  });
 }
 
 /** Fails closed: any error counts as not allowed. */
 export async function isPlatformAdmin(): Promise<boolean> {
   try {
-    const { data, error } = await rpc("is_platform_admin", {});
+    const { data, error } = await supabase.rpc("is_platform_admin", {});
     if (error) throw new Error(error.message);
     return data === true;
   } catch (e) {
@@ -588,40 +581,47 @@ export async function isPlatformAdmin(): Promise<boolean> {
 }
 
 export async function createStudy(name: string): Promise<string> {
-  const { data, error } = await rpc("create_study", { _name: name });
+  const { data, error } = await supabase.rpc("create_study", { _name: name });
   if (error) throw new Error(error.message);
-  return data as string;
+  return data;
 }
 
 export async function listStudyMembers(study: string): Promise<StudyMember[]> {
   const me = await mySession();
-  const { data, error } = await from("study_members")
+  const { data, error } = await supabase
+    .from("study_members")
     .select("user_id,email,role")
-    .eq("study_id" as never, study)
-    .order("added_at" as never);
+    .eq("study_id", study)
+    .order("added_at");
   if (error) throw new Error(error.message);
-  return (data as unknown as { user_id: string; email: string; role: StudyRole }[]).map((m) => ({
+  return data.map((m) => ({
     userId: m.user_id,
     email: m.email,
-    role: m.role,
+    role: studyRole(m.role),
     isMe: m.user_id === me?.id,
   }));
 }
 
 /** Resolves false when no account has that email. */
 export async function addStudyMember(study: string, email: string): Promise<boolean> {
-  const { data, error } = await rpc("add_study_member", { _study_id: study, _email: email });
+  const { data, error } = await supabase.rpc("add_study_member", {
+    _study_id: study,
+    _email: email,
+  });
   if (error) throw new Error(error.message);
   return !!data;
 }
 
 export async function removeStudyMember(study: string, userId: string) {
-  const { error } = await rpc("remove_study_member", { _study_id: study, _user_id: userId });
+  const { error } = await supabase.rpc("remove_study_member", {
+    _study_id: study,
+    _user_id: userId,
+  });
   if (error) throw new Error(error.message);
 }
 
 export async function setStudyAdmin(study: string, userId: string, isAdmin: boolean) {
-  const { error } = await rpc("set_study_admin", {
+  const { error } = await supabase.rpc("set_study_admin", {
     _study_id: study,
     _user_id: userId,
     _is_admin: isAdmin,
@@ -644,22 +644,22 @@ export async function createYear(
   copyFromId: string | null,
   copyBudgetLines = false,
 ): Promise<string> {
-  const { data, error } = await rpc("create_workplan_year", {
+  const { data, error } = await supabase.rpc("create_workplan_year", {
     _study_id: study,
     _name: v.name,
     _start_date: v.startDate,
     _end_date: v.endDate,
     _fx_rate: v.fxRate,
     _currency: v.currency,
-    _copy_from_period_id: copyFromId,
+    _copy_from_period_id: copyFromId ?? undefined,
     _copy_budget_lines: copyBudgetLines && copyFromId !== null,
   });
   if (error) throw new Error(error.message);
-  return data as string;
+  return data;
 }
 
 export async function updateYear(id: string, v: YearInput & { projectName: string }) {
-  const { error } = await rpc("update_workplan_year", {
+  const { error } = await supabase.rpc("update_workplan_year", {
     _period_id: id,
     _project_name: v.projectName,
     _name: v.name,
@@ -672,6 +672,9 @@ export async function updateYear(id: string, v: YearInput & { projectName: strin
 }
 
 export async function setYearStatus(id: string, status: "open" | "closed") {
-  const { error } = await rpc("set_workplan_year_status", { _period_id: id, _status: status });
+  const { error } = await supabase.rpc("set_workplan_year_status", {
+    _period_id: id,
+    _status: status,
+  });
   if (error) throw new Error(error.message);
 }

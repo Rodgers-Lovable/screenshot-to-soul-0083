@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
-  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -33,19 +32,23 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useBudgetData, useWorkplan } from "@/data/hooks";
-import { roundText } from "@/lib/deliveries";
+import { deliveryLabel } from "@/lib/deliveries";
+import { SELECT_ALL, fromSelect } from "@/lib/select";
+import { periodMonths, UPCOMING_DAYS, type EventTab } from "@/lib/calc";
 import {
-  eventFigures,
-  eventFlags,
-  inEventTab,
-  lineFlags,
-  lineProgress,
-  lineSummary,
-  periodMonths,
-  UPCOMING_DAYS,
-  type EventTab,
-  type FlagKind,
-} from "@/lib/calc";
+  countByTab,
+  filterSpending,
+  groupByLine,
+  hasSpendingFilter,
+  nextPlanned,
+  rowsByDay,
+  sortSpending,
+  type EventFlagFilter,
+  type SortKey,
+  type SpendingFilter,
+  type SpendingRow,
+  type SpendingSort,
+} from "@/lib/spending";
 import { todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { Money } from "@/components/app/currency";
@@ -57,20 +60,12 @@ import { cn } from "@/lib/utils";
 import { Truncated } from "@/components/app/truncated";
 import { activityOptions } from "@/lib/budget-tree";
 
-export type EventFlagFilter =
-  "upcoming" | "overdue" | "no-date" | "missing-evidence" | "over-budget";
-export interface SpendingSearch {
+export interface SpendingSearch extends SpendingFilter {
   tab?: EventTab;
-  activity?: string;
-  delivery?: string;
-  line?: string;
-  month?: string;
-  flag?: EventFlagFilter;
-  q?: string;
   view?: "flat" | "calendar";
 }
 const FLAGS: { v: EventFlagFilter; l: string }[] = [
-  { v: "upcoming", l: "Upcoming (30 days)" },
+  { v: "upcoming", l: `Upcoming (${UPCOMING_DAYS} days)` },
   { v: "overdue", l: "Overdue" },
   { v: "no-date", l: "No date" },
   { v: "missing-evidence", l: "Missing evidence" },
@@ -83,16 +78,16 @@ const TABS: { v: EventTab; l: string }[] = [
   { v: "done", l: "Done" },
   { v: "all", l: "All" },
 ];
-const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+const searchText = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 
 export const Route = createFileRoute("/spending")({
   validateSearch: (s: Record<string, unknown>): SpendingSearch => ({
     tab: TABS.some((t) => t.v === s.tab) ? (s.tab as EventTab) : undefined,
-    activity: str(s.activity),
-    delivery: str(s.delivery),
-    line: str(s.line),
-    month: str(s.month),
-    q: str(s.q),
+    activity: searchText(s.activity),
+    delivery: searchText(s.delivery),
+    line: searchText(s.line),
+    month: searchText(s.month),
+    q: searchText(s.q),
     flag: FLAGS.some((f) => f.v === s.flag) ? (s.flag as EventFlagFilter) : undefined,
     view: s.view === "calendar" || s.view === "flat" ? s.view : undefined,
   }),
@@ -113,15 +108,6 @@ export const Route = createFileRoute("/spending")({
   component: SpendingPage,
 });
 
-type SortKey = "date" | "title" | "status" | "actual";
-type Row = {
-  e: BudgetEvent;
-  line: BudgetLine;
-  flags: FlagKind[];
-  n: number;
-  fig: ReturnType<typeof eventFigures>;
-};
-const ALL = "__all";
 const HINT_KEY = "pbt-events-hint-dismissed";
 const niceDate = (d?: string) => (d ? format(parseISO(d), "d MMM yyyy") : undefined);
 
@@ -132,32 +118,25 @@ function SpendingPage() {
   const { open } = useRecord();
   const { canEdit } = useYear();
   const today = todayISO();
-  const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: "date", dir: 1 });
+  const [sort, setSort] = useState<SpendingSort>({ key: "date", dir: 1 });
   const [calMonth, setCalMonth] = useState(() => startOfMonth(new Date()));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scheduling, setScheduling] = useState<BudgetLine | null>(null);
 
   const wp = useWorkplan();
-  const hasFilter = !!(
-    search.activity ||
-    search.delivery ||
-    search.line ||
-    search.month ||
-    search.flag ||
-    search.q
-  );
+  const hasFilter = hasSpendingFilter(search);
   // "Round 2 at Site A", in the activity's words, for the delivery filter and the rows.
   const deliveryText = useMemo(() => {
     const sites = new Map((wp.data?.sites ?? []).map((x) => [x.id, x.name]));
+    const activityTitle = new Map(d.activities.map((a) => [a.id, a.title]));
     return new Map(
       d.deliveries.map((x) => {
-        const a = d.activities.find((y) => y.id === x.activityId);
-        const where = x.siteId ? ` at ${sites.get(x.siteId) ?? "a site"}` : "";
+        const short = deliveryLabel(x, (id) => sites.get(id));
         return [
           x.id,
           {
-            short: `${roundText(x)}${where}`,
-            long: `${a?.title ?? ""} · ${roundText(x)}${where}`,
+            short,
+            long: `${activityTitle.get(x.activityId) ?? ""} · ${short}`,
             activityId: x.activityId,
           },
         ];
@@ -170,111 +149,22 @@ function SpendingPage() {
   const set = (patch: Partial<SpendingSearch>) =>
     nav({ search: (p) => ({ ...p, tab: p.tab ?? tab, ...patch }), replace: true });
 
-  // Everything that passes the filter bar; tabs narrow it further.
-  const filtered = useMemo<Row[]>(() => {
-    const lineById = new Map(d.lines.map((l) => [l.id, l]));
-    const risky = new Set(
-      d.lines.filter((l) => lineFlags(lineSummary(l, d.events)).length).map((l) => l.id),
-    );
-    const evidence = new Map<string, number>();
-    for (const a of d.attachments)
-      if (a.eventId) evidence.set(a.eventId, (evidence.get(a.eventId) ?? 0) + 1);
-    const q = search.q?.toLowerCase();
-    return d.events.flatMap((e) => {
-      const line = lineById.get(e.lineId);
-      if (!line) return [];
-      const n = evidence.get(e.id) ?? 0;
-      const flags = eventFlags(e, n, today);
-      if (search.activity && line.activityId !== search.activity) return [];
-      if (search.line && line.id !== search.line) return [];
-      if (search.delivery && e.deliveryId !== search.delivery) return [];
-      if (
-        search.month &&
-        !(e.actualDate ?? e.plannedDate ?? "").startsWith(search.month) &&
-        !(e.plannedDate ?? "").startsWith(search.month)
-      )
-        return [];
-      if (q && !e.title.toLowerCase().includes(q)) return [];
-      if (search.flag === "upcoming" && !inEventTab(e, flags, "upcoming", today)) return [];
-      if (search.flag === "over-budget" && !risky.has(line.id)) return [];
-      if (
-        search.flag &&
-        search.flag !== "upcoming" &&
-        search.flag !== "over-budget" &&
-        !flags.includes(search.flag)
-      )
-        return [];
-      return [{ e, line, flags, n, fig: eventFigures(line, e) }];
-    });
-  }, [d, search, today]);
-
+  const filtered = useMemo(() => filterSpending(d, search, today), [d, search, today]);
   const counts = useMemo(
     () =>
-      Object.fromEntries(
-        TABS.map((t) => [t.v, filtered.filter((r) => inEventTab(r.e, r.flags, t.v, today)).length]),
-      ) as Record<EventTab, number>,
+      countByTab(
+        filtered,
+        TABS.map((t) => t.v),
+        today,
+      ),
     [filtered, today],
   );
-
-  const rows = useMemo(() => {
-    const dateOf = (r: Row) =>
-      (tab === "done" ? (r.e.actualDate ?? r.e.plannedDate) : r.e.plannedDate) ?? "9";
-    // Done tab reads newest first.
-    const dir = tab === "done" && sort.k === "date" ? -sort.dir : sort.dir;
-    return filtered
-      .filter((r) => inEventTab(r.e, r.flags, tab, today))
-      .sort((a, b) => {
-        const v =
-          sort.k === "date"
-            ? dateOf(a).localeCompare(dateOf(b))
-            : sort.k === "title"
-              ? a.e.title.localeCompare(b.e.title)
-              : sort.k === "status"
-                ? a.e.status.localeCompare(b.e.status)
-                : a.fig.actual - b.fig.actual;
-        return v * dir;
-      });
-  }, [filtered, tab, sort, today]);
-
-  const groups = useMemo(() => {
-    const actOrder = new Map(
-      activityOptions({
-        objectives: d.objectives,
-        outcomes: d.outcomes,
-        activities: d.activities,
-      }).map((o, i) => [o.id, { label: o.label, index: i }]),
-    );
-    const byLine = new Map<string, Row[]>();
-    for (const r of rows) byLine.set(r.line.id, [...(byLine.get(r.line.id) ?? []), r]);
-    return d.lines
-      .filter((l) => byLine.has(l.id))
-      .sort(
-        (a, b) =>
-          (actOrder.get(a.activityId)?.index ?? 0) - (actOrder.get(b.activityId)?.index ?? 0) ||
-          a.sortOrder - b.sortOrder,
-      )
-      .map((line) => {
-        const lineEvents = d.events.filter((e) => e.lineId === line.id);
-        const matched = byLine.get(line.id)!.sort((a, b) => a.e.sequence - b.e.sequence);
-        return {
-          line,
-          activityName: actOrder.get(line.activityId)?.label ?? "",
-          rows: matched,
-          lineEvents,
-          progress: lineProgress(lineEvents, today),
-          flags: [...new Set(matched.flatMap((r) => r.flags))],
-          actual: lineSummary(line, d.events).actualToDate,
-        };
-      });
-  }, [rows, d, today]);
-
-  const nextUp = useMemo(
-    () =>
-      d.events
-        .filter((e) => e.status === "planned" && e.plannedDate && e.plannedDate >= today)
-        .sort((a, b) => a.plannedDate!.localeCompare(b.plannedDate!))[0],
-    [d.events, today],
+  const rows = useMemo(
+    () => sortSpending(filtered, tab, sort, today),
+    [filtered, tab, sort, today],
   );
+  const groups = useMemo(() => groupByLine(rows, d, today), [rows, d, today]);
+  const nextUp = useMemo(() => nextPlanned(d.events, today), [d.events, today]);
 
   if (!d.ready) return null;
   const months = d.period ? periodMonths(d.period) : [];
@@ -288,11 +178,11 @@ function SpendingPage() {
   const th = (k: SortKey, label: string, right?: boolean) => (
     <th
       className={cn("px-3 py-2 font-medium", right ? "text-right" : "text-left")}
-      aria-sort={sort.k === k ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
+      aria-sort={sort.key === k ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
     >
       <button
         className="inline-flex items-center gap-1"
-        onClick={() => setSort((s) => ({ k, dir: s.k === k ? (s.dir === 1 ? -1 : 1) : 1 }))}
+        onClick={() => setSort((s) => ({ key: k, dir: s.key === k ? (s.dir === 1 ? -1 : 1) : 1 }))}
       >
         {label}
         <ArrowUpDown className="h-3 w-3" />
@@ -360,7 +250,6 @@ function SpendingPage() {
             outcomes: d.outcomes,
             activities: d.activities,
           }).map((o) => ({ v: o.id, l: o.label }))}
-          all={ALL}
         />
         <FilterSelect
           label="Line"
@@ -369,7 +258,6 @@ function SpendingPage() {
           opts={d.lines
             .filter((l) => !search.activity || l.activityId === search.activity)
             .map((l) => ({ v: l.id, l: l.description }))}
-          all={ALL}
         />
         <FilterSelect
           label="Round"
@@ -379,21 +267,18 @@ function SpendingPage() {
           opts={[...deliveryText.entries()]
             .filter(([, t]) => !search.activity || t.activityId === search.activity)
             .map(([id, t]) => ({ v: id, l: t.long }))}
-          all={ALL}
         />
         <FilterSelect
           label="Month"
           value={search.month}
           onChange={(v) => set({ month: v })}
           opts={months.map((m) => ({ v: m, l: format(parseISO(m + "-01"), "MMM yyyy") }))}
-          all={ALL}
         />
         <FilterSelect
           label="Flag"
           value={search.flag}
           onChange={(v) => set({ flag: v as EventFlagFilter | undefined })}
           opts={FLAGS}
-          all={ALL}
         />
         <Input
           aria-label="Search spending"
@@ -440,8 +325,9 @@ function SpendingPage() {
               {groups.map((g) => {
                 const multi = g.lineEvents.length > 1;
                 const isOpen = multi && expanded.has(g.line.id);
-                const single = g.rows[0]!;
-                const activate = () => (multi ? toggle(g.line.id) : open(single.e.id));
+                const single = g.rows[0];
+                if (!single) return [];
+                const activate = () => (multi ? toggle(g.line.id) : open(single.event.id));
                 const pct = g.progress.total
                   ? ((g.progress.done + g.progress.cancelled) / g.progress.total) * 100
                   : 0;
@@ -486,11 +372,11 @@ function SpendingPage() {
                           <Progress value={pct} className="h-1.5" />
                         </div>
                       ) : (
-                        <StatusChip status={single.e.status} />
+                        <StatusChip status={single.event.status} />
                       )}
                     </td>
                     <td className="tabular-nums">
-                      {niceDate(multi ? g.progress.next : single.e.plannedDate) ?? (
+                      {niceDate(multi ? g.progress.next : single.event.plannedDate) ?? (
                         <span className="text-muted-foreground">
                           {g.progress.undated ? "No date" : "—"}
                         </span>
@@ -532,7 +418,7 @@ function SpendingPage() {
                     </td>
                   </tr>,
                   ...(isOpen
-                    ? g.rows.map(({ e, flags, fig }) => (
+                    ? g.rows.map(({ event: e, flags, figures: fig }) => (
                         <tr
                           key={e.id}
                           tabIndex={0}
@@ -590,7 +476,7 @@ function SpendingPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ e, line, flags, fig }) => (
+              {rows.map(({ event: e, line, flags, figures: fig }) => (
                 <tr
                   key={e.id}
                   tabIndex={0}
@@ -730,7 +616,6 @@ function FilterSelect({
   value,
   onChange,
   opts,
-  all,
   plural,
 }: {
   label: string;
@@ -738,10 +623,9 @@ function FilterSelect({
   value?: string;
   onChange: (v: string | undefined) => void;
   opts: { v: string; l: string }[];
-  all: string;
 }) {
   return (
-    <Select value={value ?? all} onValueChange={(v) => onChange(v === all ? undefined : v)}>
+    <Select value={value ?? SELECT_ALL} onValueChange={(v) => onChange(fromSelect(v))}>
       <SelectTrigger className="h-9 w-auto max-w-55" aria-label={label}>
         <Truncated
           text={opts.find((o) => o.v === value)?.l ?? `All ${plural ?? `${label.toLowerCase()}s`}`}
@@ -750,7 +634,7 @@ function FilterSelect({
         </Truncated>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={all}>All {plural ?? `${label.toLowerCase()}s`}</SelectItem>
+        <SelectItem value={SELECT_ALL}>All {plural ?? `${label.toLowerCase()}s`}</SelectItem>
         {opts.map((o) => (
           <SelectItem key={o.v} value={o.v}>
             {o.l}
@@ -761,7 +645,6 @@ function FilterSelect({
   );
 }
 
-type Rows = { e: BudgetEvent; flags: string[] }[];
 function Calendar({
   month,
   setMonth,
@@ -771,7 +654,7 @@ function Calendar({
 }: {
   month: Date;
   setMonth: (d: Date) => void;
-  rows: Rows;
+  rows: SpendingRow[];
   today: string;
   onOpen: (id: string) => void;
 }) {
@@ -779,12 +662,7 @@ function Calendar({
     start: startOfWeek(month, { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
   });
-  const byDay = new Map<string, Rows>();
-  for (const r of rows) {
-    const k = r.e.status === "done" ? (r.e.actualDate ?? r.e.plannedDate) : r.e.plannedDate;
-    if (!k) continue;
-    byDay.set(k, [...(byDay.get(k) ?? []), r]);
-  }
+  const byDay = rowsByDay(rows);
   const chip: Record<EventStatus, string> = {
     planned: "bg-card border-border",
     done: "bg-accent text-accent-foreground border-primary/30",
@@ -842,7 +720,7 @@ function Calendar({
                 </span>
               </div>
               <div className="space-y-1">
-                {list.map(({ e, flags }) => (
+                {list.map(({ event: e, flags }) => (
                   <button
                     key={e.id}
                     onClick={() => onOpen(e.id)}

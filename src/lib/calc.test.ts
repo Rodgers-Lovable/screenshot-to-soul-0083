@@ -185,7 +185,7 @@ describe("burn rate", () => {
     const s = makeSeed();
     const series = cumulativeByMonth(s.period!, s.lines, s.events);
     expect(series).toHaveLength(12);
-    expect(series[11].actual).toBe(periodSummary(s.lines, s.events).actualToDate);
+    expect(series[11]?.actual).toBe(periodSummary(s.lines, s.events).actualToDate);
   });
 });
 
@@ -325,7 +325,7 @@ describe("excel import parsing", () => {
       fileAmount: 172800,
       durationUnit: "days",
     });
-    expect(rows[1].unitCost).toBe(923);
+    expect(rows[1]?.unitCost).toBe(923);
   });
 });
 
@@ -347,6 +347,11 @@ describe("a 30 September to 29 September year", () => {
     expect(m[0]).toBe("2026-10");
     expect(m[11]).toBe("2027-09");
     expect(new Set(m).size).toBe(12);
+  });
+  it("has no months while a date is missing", () => {
+    expect(periodMonths(per("", "2027-09-29"))).toEqual([]);
+    expect(periodMonths(per("2026-09-30", ""))).toEqual([]);
+    expect(periodMonths(per("", ""))).toEqual([]);
   });
   it("has 12 months across a leap day", () => {
     const m = periodMonths(per("2027-09-30", "2028-09-29"));

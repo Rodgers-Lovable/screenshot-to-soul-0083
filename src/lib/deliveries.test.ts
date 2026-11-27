@@ -18,6 +18,7 @@ import {
   progressText,
   roundDates,
   roundText,
+  deliveryLabel,
   validateDelivery,
   validateEventLink,
   validateRounds,
@@ -138,6 +139,20 @@ describe("planRounds", () => {
     expect(p.outsideYear).toBe(2);
     expect(p.create).toHaveLength(3);
   });
+  it("warns about no dates while the year has none", () => {
+    const plan = (year: { startDate: string; endDate: string }) =>
+      planRounds({
+        kind: "general",
+        rounds: 2,
+        sites: [],
+        existing: [],
+        firstDate: "2027-01-01",
+        repeat: { every: 1, unit: "months" },
+        year,
+      });
+    expect(plan({ startDate: "2026-09-30", endDate: "" }).outsideYear).toBe(0);
+    expect(plan({ startDate: "", endDate: "2027-09-29" }).outsideYear).toBe(0);
+  });
   it("makes nothing for a site activity with no active sites", () => {
     const p = planRounds({
       kind: "site",
@@ -196,6 +211,13 @@ describe("rounds", () => {
       "Round 2: Midline",
     );
     expect(roundText(del("x", "planned"))).toBe("Round 1");
+  });
+  it("labels a round with its site", () => {
+    const names: Record<string, string> = { s1: "Kisumu" };
+    const name = (id: string) => names[id];
+    expect(deliveryLabel(del("x", "planned", { siteId: "s1" }), name)).toBe("Round 1 at Kisumu");
+    expect(deliveryLabel(del("x", "planned", { siteId: "gone" }), name)).toBe("Round 1 at a site");
+    expect(deliveryLabel(del("x", "planned"), name)).toBe("Round 1");
   });
   it("filters by site and status", () => {
     const list = [

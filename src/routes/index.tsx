@@ -87,16 +87,17 @@ function Dashboard() {
           e.plannedDate >= today &&
           e.plannedDate <= in30,
       )
-      .sort((a, b) => a.plannedDate!.localeCompare(b.plannedDate!));
+      .sort((a, b) => (a.plannedDate ?? "").localeCompare(b.plannedDate ?? ""));
     const overdue = d.events
       .filter((e) => eventFlags(e, 0, today).includes("overdue"))
-      .sort((a, b) => a.plannedDate!.localeCompare(b.plannedDate!));
+      .sort((a, b) => (a.plannedDate ?? "").localeCompare(b.plannedDate ?? ""));
     const missing = d.events.filter((e) =>
       eventFlags(e, attCount(e.id), today).includes("missing-evidence"),
     );
-    const risky = d.lines
-      .filter((l) => lineFlags(lineSums.get(l.id)!).length)
-      .map((l) => ({ l, s: lineSums.get(l.id)! }));
+    const risky = d.lines.flatMap((l) => {
+      const s = lineSums.get(l.id);
+      return s && lineFlags(s).length ? [{ l, s }] : [];
+    });
     return {
       total,
       burn,
