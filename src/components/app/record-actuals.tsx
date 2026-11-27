@@ -80,6 +80,9 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const [deliveryId, setDeliveryId] = useState(ev.deliveryId ?? NO_DELIVERY);
   const wp = useWorkplan();
   const siteOf = (id?: string) => wp.data?.sites.find((x) => x.id === id)?.name;
+  // A site activity's round already names the site; keep an old location visible.
+  const showLocation =
+    data.activities.find((a) => a.id === line.activityId)?.kind !== "site" || !!ev.location;
   const choices = groupByRound(
     data.deliveries.filter((x) => x.activityId === line.activityId),
     (id) => siteOf(id) ?? "",
@@ -275,10 +278,12 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           {num("quantity", "Quantity", line.quantityUnit)}
           {num("unitCost", "Unit cost", "KES")}
           {num("duration", "Duration", line.durationUnit)}
-          <div className="space-y-1 sm:col-span-2">
-            <Label htmlFor="location">Location</Label>
-            <Input id="location" {...form.register("location")} />
-          </div>
+          {showLocation && (
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="location">Location</Label>
+              <Input id="location" {...form.register("location")} />
+            </div>
+          )}
           <div className="space-y-1 sm:col-span-2">
             <Label>For round</Label>
             <Select value={deliveryId} onValueChange={setDeliveryId}>
