@@ -20,19 +20,22 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { format, parseISO } from "date-fns";
 import {
   useAddAttachment,
   useBudgetData,
   useRemoveAttachment,
+  useUpdateDelivery,
   useUpdateEvent,
   useWorkplan,
 } from "@/data/hooks";
 import { eventFigures, eventPlanned } from "@/lib/calc";
-import { groupByRound, roundText } from "@/lib/deliveries";
+import { groupByRound, offerRoundDone, roundText } from "@/lib/deliveries";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { StatusChip } from "./chips";
@@ -89,6 +92,13 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   ).flatMap((g) => g.items);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"save" | "done" | "cancel" | "reopen" | null>(null);
+  const updRound = useUpdateDelivery();
+  const [offer, setOffer] = useState<{ id: string; name: string; date: string } | null>(null);
+  const roundName = (id: string) => {
+    const x = data.deliveries.find((d) => d.id === id);
+    if (!x) return "";
+    return `${roundText(x)}${x.siteId ? ` at ${siteOf(x.siteId) ?? "a site"}` : ""}`;
+  };
   const inputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<FormIn, unknown, FormOut>({
@@ -206,6 +216,26 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
         toast.success(
           status === "done" ? "Marked done" : status === "cancelled" ? "Event cancelled" : "Saved",
         );
+      const round = data.deliveries.find((d) => d.id === deliveryId);
+      if (round && offerRoundDone(status, round, v.actualDate)) {
+        setOffer({ id: round.id, name: roundName(round.id), date: v.actualDate });
+        return;
+      }
+      onDone?.();
+    } catch {
+      // The mutation hook already showed the error.
+    }
+  }
+
+  async function markRoundDone() {
+    if (!offer) return;
+    try {
+      await updRound.mutateAsync({
+        id: offer.id,
+        patch: { status: "completed", actualDate: offer.date },
+      });
+      toast.success(`${offer.name} marked done. Add proof it happened on the activity page.`);
+      setOffer(null);
       onDone?.();
     } catch {
       // The mutation hook already showed the error.
@@ -473,6 +503,42 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
               }}
             >
               Mark cancelled
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!offer}
+        onOpenChange={(o) => {
+          if (!o && !updRound.isPending) {
+            setOffer(null);
+            onDone?.();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark {offer?.name} done too?</DialogTitle>
+            <DialogDescription>
+              This spending is for that round. It will be marked done with{" "}
+              {offer ? format(parseISO(offer.date), "d MMM yyyy") : ""} as the date it took place.
+              Proof and indicator results are still added on the activity page.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={updRound.isPending}
+              onClick={() => {
+                setOffer(null);
+                onDone?.();
+              }}
+            >
+              Not now
+            </Button>
+            <Button loading={updRound.isPending} onClick={markRoundDone}>
+              Mark round done
             </Button>
           </DialogFooter>
         </DialogContent>

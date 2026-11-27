@@ -9,6 +9,7 @@ import type {
   Delivery,
   DeliveryResult,
   DeliveryStatus,
+  EventStatus,
 } from "@/lib/types";
 
 export const DELIVERY_STATUSES: DeliveryStatus[] = ["planned", "in_progress", "completed"];
@@ -251,6 +252,13 @@ export function validateEventLink(
     return "That spending record is already linked to another round. Unlink it first.";
   return null;
 }
+
+/** After a spending record is marked done, whether to offer marking its round done on the same date. */
+export const offerRoundDone = (
+  eventStatus: EventStatus,
+  round: Pick<Delivery, "status"> | undefined,
+  actualDate: string,
+) => eventStatus === "done" && !!round && round.status !== "completed" && isoDate.test(actualDate);
 
 /** Spending records of the activity that are not linked to any delivery. */
 export function linkableEvents(

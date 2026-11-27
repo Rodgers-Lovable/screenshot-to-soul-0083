@@ -12,6 +12,7 @@ import {
   linkableEvents,
   missingEvidence,
   nextRound,
+  offerRoundDone,
   parentDeleteBlock,
   planRounds,
   progressText,
@@ -353,5 +354,21 @@ describe("filterTreeByStatus", () => {
     const done = filterTreeByStatus(tree, "completed", status);
     expect(done[0]?.outcomes[0]?.activities.map((a) => a.id)).toEqual(["a1"]);
     expect(filterTreeByStatus(tree, "in_progress", status)).toEqual([]);
+  });
+});
+
+describe("offerRoundDone", () => {
+  it("offers a linked round that is not done yet", () => {
+    expect(offerRoundDone("done", { status: "planned" }, "2026-11-03")).toBe(true);
+    expect(offerRoundDone("done", { status: "in_progress" }, "2026-11-03")).toBe(true);
+  });
+  it("never offers a round that is already done", () => {
+    expect(offerRoundDone("done", { status: "completed" }, "2026-11-03")).toBe(false);
+  });
+  it("offers only when the record is marked done with a date", () => {
+    expect(offerRoundDone("planned", { status: "planned" }, "2026-11-03")).toBe(false);
+    expect(offerRoundDone("cancelled", { status: "planned" }, "2026-11-03")).toBe(false);
+    expect(offerRoundDone("done", undefined, "2026-11-03")).toBe(false);
+    expect(offerRoundDone("done", { status: "planned" }, "")).toBe(false);
   });
 });
