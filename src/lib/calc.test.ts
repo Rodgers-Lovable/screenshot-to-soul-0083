@@ -185,7 +185,7 @@ describe("burn rate", () => {
     const s = makeSeed();
     const series = cumulativeByMonth(s.period!, s.lines, s.events);
     expect(series).toHaveLength(12);
-    expect(series[11].actual).toBe(periodSummary(s.lines, s.events).actualToDate);
+    expect(series[11]?.actual).toBe(periodSummary(s.lines, s.events).actualToDate);
   });
 });
 
@@ -325,7 +325,7 @@ describe("excel import parsing", () => {
       fileAmount: 172800,
       durationUnit: "days",
     });
-    expect(rows[1].unitCost).toBe(923);
+    expect(rows[1]?.unitCost).toBe(923);
   });
 });
 
