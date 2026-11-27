@@ -95,7 +95,7 @@ function useDeliveryContext(activity: Activity) {
 export function DeliveriesCard({ activity }: { activity: Activity }) {
   const { canEdit } = useYear();
   const ctx = useDeliveryContext(activity);
-  const { d, siteName, mine, proofCount, linked } = ctx;
+  const { siteName, mine, proofCount, linked } = ctx;
   const [filter, setFilter] = useState<DeliveryFilter>({});
   const [open, setOpen] = useState<string | null>(null);
   const [gen, setGen] = useState(false);
@@ -560,7 +560,7 @@ function Editor({
   onClose: () => void;
 }) {
   const { canEdit, closed } = useYear();
-  const { d, wp, siteName, proofCount, linked } = ctx;
+  const { d, wp, siteName, linked } = ctx;
   const indicators = (wp.data?.indicators ?? [])
     .filter((i) => i.activityId === activity.id)
     .sort((a, b) => a.sortOrder - b.sortOrder);

@@ -71,7 +71,7 @@ export const Route = createFileRoute("/budget")({
 
 function BudgetPage() {
   const d = useBudgetData();
-  const { canEdit, closed } = useYear();
+  const { closed } = useYear();
   const f = useFmt();
   const [q, setQ] = useState("");
   const [activityId, setActivityId] = useState("");
