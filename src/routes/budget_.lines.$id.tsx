@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useBudgetData, useUpdateLine } from "@/data/hooks";
 import { actualInputs, eventFigures, eventFlags, lineFlags, lineSummary } from "@/lib/calc";
 import { formulaShort, kesToCents, pct, todayISO } from "@/lib/format";
-import { Money, useFmt } from "@/components/app/currency";
+import { Money, useFmt, Variance } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
 import { MoveLineDialog } from "@/components/app/move-line-dialog";
@@ -40,6 +40,8 @@ function LineDetail() {
   const { id } = Route.useParams();
   const d = useBudgetData();
   const f = useFmt();
+  const dir = (c: number) =>
+    c ? `${f.primary(Math.abs(c))} ${c > 0 ? "under" : "over"}` : "on plan";
   const { open } = useRecord();
   const { canEdit } = useYear();
   const [edit, setEdit] = useState(false);
@@ -152,9 +154,9 @@ function LineDetail() {
 
       <Card className="grid grid-cols-2 gap-x-6 gap-y-3 p-4 md:grid-cols-4">
         <Minor label="Variance on completed">
-          <Money cents={s.varianceOnCompleted} signed tone="auto" className="items-start!" />
+          <Variance cents={s.varianceOnCompleted} className="items-start!" />
           <p className="text-xs text-muted-foreground tabular-nums">
-            Volume {f.primary(s.volumeVariance)} · Rate {f.primary(s.rateVariance)}
+            Volume {dir(s.volumeVariance)} · Rate {dir(s.rateVariance)}
           </p>
         </Minor>
         <Minor label="Still to spend">
@@ -216,9 +218,7 @@ function LineDetail() {
                     <td className="num">{done ? f.kes(a.r1) : ""}</td>
                     <td className="num">{done ? a.d1 : ""}</td>
                     <td className="text-right">{done && <Money cents={fig.actual} />}</td>
-                    <td className="text-right">
-                      {done && <Money cents={fig.variance} signed tone="auto" />}
-                    </td>
+                    <td className="text-right">{done && <Variance cents={fig.variance} />}</td>
                     <td className="num">{n}</td>
                     <td>
                       <Button size="sm" variant="outline" onClick={() => open(e.id)}>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { formatKES, formatUSD } from "@/lib/format";
 import { usePeriod } from "@/data/hooks";
 import { cn } from "@/lib/utils";
@@ -71,6 +72,38 @@ export function Money({
         {sign}
         {f.secondary(cents)}
       </span>
+    </span>
+  );
+}
+
+/**
+ * Planned minus actual. Under plan shows green with a down trend, over plan red with an up trend.
+ * Amounts are shown without a sign; the icon and colour give the direction.
+ */
+export function Variance({ cents, className }: { cents: number; className?: string }) {
+  const f = useFmt();
+  const under = cents > 0;
+  const over = cents < 0;
+  const Icon = under ? TrendingDown : over ? TrendingUp : Minus;
+  const word = under ? "under plan" : over ? "over plan" : "on plan";
+  const abs = Math.abs(cents);
+  return (
+    <span
+      className={cn("inline-flex flex-col items-end leading-tight tabular-nums", className)}
+      title={`${f.primary(abs)} ${word}`}
+    >
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 text-sm",
+          under && "text-success",
+          over && "text-destructive",
+        )}
+      >
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        {f.primary(abs)}
+        <span className="sr-only"> {word}</span>
+      </span>
+      <span className="text-[10px] text-muted-foreground">{f.secondary(abs)}</span>
     </span>
   );
 }

@@ -36,7 +36,7 @@ import { roundText } from "@/lib/deliveries";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { StatusChip } from "./chips";
-import { Money, useFmt } from "./currency";
+import { Money, useFmt, Variance } from "./currency";
 
 const schema = z.object({
   actualDate: z.string().min(1, "Date required"),
@@ -307,9 +307,9 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
       <section className="rounded-md border p-3" aria-live="polite">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Fig label="Actual amount" cents={live.actual} />
-          <Fig label="Variance" cents={live.variance} signed tone />
-          <Fig label="Volume variance" cents={live.volumeVariance} signed tone />
-          <Fig label="Rate variance" cents={live.rateVariance} signed tone />
+          <Fig label="Variance" cents={live.variance} variance />
+          <Fig label="Volume variance" cents={live.volumeVariance} variance />
+          <Fig label="Rate variance" cents={live.rateVariance} variance />
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{explain}</p>
       </section>
@@ -473,21 +473,11 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   );
 }
 
-function Fig({
-  label,
-  cents,
-  signed,
-  tone,
-}: {
-  label: string;
-  cents: number;
-  signed?: boolean;
-  tone?: boolean;
-}) {
+function Fig({ label, cents, variance }: { label: string; cents: number; variance?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
-      <Money cents={cents} signed={signed} tone={tone ? "auto" : undefined} />
+      {variance ? <Variance cents={cents} /> : <Money cents={cents} />}
     </div>
   );
 }
