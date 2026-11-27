@@ -247,9 +247,9 @@ describe("event tabs", () => {
     ).toBe(true);
     expect(inEventTab(ev({ plannedDate: "2026-12-02" }), [], "month", today)).toBe(false);
   });
-  it("upcoming is planned within 60 days", () => {
-    expect(inEventTab(ev({ plannedDate: "2027-01-10" }), [], "upcoming", today)).toBe(true);
-    expect(inEventTab(ev({ plannedDate: "2027-02-10" }), [], "upcoming", today)).toBe(false);
+  it("upcoming is planned within 30 days", () => {
+    expect(inEventTab(ev({ plannedDate: "2026-12-18" }), [], "upcoming", today)).toBe(true);
+    expect(inEventTab(ev({ plannedDate: "2026-12-19" }), [], "upcoming", today)).toBe(false);
     expect(inEventTab(ev({ plannedDate: "2026-11-01" }), [], "upcoming", today)).toBe(false);
   });
 });
