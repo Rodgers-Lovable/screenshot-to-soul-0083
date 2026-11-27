@@ -71,12 +71,13 @@ export function ScheduleDialog({
   }, [first, repeat, sorted.length]);
   const proposed = (e: BudgetEvent, i: number) =>
     e.status !== "planned" ? e.plannedDate : mode === "repeat" ? generated[i] : custom[e.sequence];
-  const outside = period
-    ? sorted.filter((e, i) => {
-        const d = proposed(e, i);
-        return e.status === "planned" && d && (d < period.startDate || d > period.endDate);
-      }).length
-    : 0;
+  const outside =
+    period?.startDate && period.endDate
+      ? sorted.filter((e, i) => {
+          const d = proposed(e, i);
+          return e.status === "planned" && d && (d < period.startDate || d > period.endDate);
+        }).length
+      : 0;
 
   const save = () => {
     if (!line) return;
