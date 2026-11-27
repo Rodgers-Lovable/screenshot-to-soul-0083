@@ -10,15 +10,24 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ActivitiesRouteImport } from './routes/activities'
 import { Route as BudgetRouteImport } from './routes/budget'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SpendingRouteImport } from './routes/spending'
+import { Route as ActivitiesIdRouteImport } from './routes/activities_.$id'
 import { Route as BudgetLinesIdRouteImport } from './routes/budget_.lines.$id'
 import { Route as EventsIdRecordRouteImport } from './routes/events_.$id.record'
+import { Route as SpendingIdRecordRouteImport } from './routes/spending_.$id.record'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivitiesRoute = ActivitiesRouteImport.update({
+  id: '/activities',
+  path: '/activities',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BudgetRoute = BudgetRouteImport.update({
@@ -36,6 +45,16 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpendingRoute = SpendingRouteImport.update({
+  id: '/spending',
+  path: '/spending',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivitiesIdRoute = ActivitiesIdRouteImport.update({
+  id: '/activities_/$id',
+  path: '/activities/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BudgetLinesIdRoute = BudgetLinesIdRouteImport.update({
   id: '/budget_/lines/$id',
   path: '/budget/lines/$id',
@@ -46,66 +65,99 @@ const EventsIdRecordRoute = EventsIdRecordRouteImport.update({
   path: '/events/$id/record',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SpendingIdRecordRoute = SpendingIdRecordRouteImport.update({
+  id: '/spending_/$id/record',
+  path: '/spending/$id/record',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activities': typeof ActivitiesRoute
   '/budget': typeof BudgetRoute
   '/events': typeof EventsRoute
   '/settings': typeof SettingsRoute
+  '/spending': typeof SpendingRoute
+  '/activities/$id': typeof ActivitiesIdRoute
   '/budget/lines/$id': typeof BudgetLinesIdRoute
   '/events/$id/record': typeof EventsIdRecordRoute
+  '/spending/$id/record': typeof SpendingIdRecordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activities': typeof ActivitiesRoute
   '/budget': typeof BudgetRoute
   '/events': typeof EventsRoute
   '/settings': typeof SettingsRoute
+  '/spending': typeof SpendingRoute
+  '/activities/$id': typeof ActivitiesIdRoute
   '/budget/lines/$id': typeof BudgetLinesIdRoute
   '/events/$id/record': typeof EventsIdRecordRoute
+  '/spending/$id/record': typeof SpendingIdRecordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activities': typeof ActivitiesRoute
   '/budget': typeof BudgetRoute
   '/events': typeof EventsRoute
   '/settings': typeof SettingsRoute
+  '/spending': typeof SpendingRoute
+  '/activities_/$id': typeof ActivitiesIdRoute
   '/budget_/lines/$id': typeof BudgetLinesIdRoute
   '/events_/$id/record': typeof EventsIdRecordRoute
+  '/spending_/$id/record': typeof SpendingIdRecordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activities'
     | '/budget'
     | '/events'
     | '/settings'
+    | '/spending'
+    | '/activities/$id'
     | '/budget/lines/$id'
     | '/events/$id/record'
+    | '/spending/$id/record'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activities'
     | '/budget'
     | '/events'
     | '/settings'
+    | '/spending'
+    | '/activities/$id'
     | '/budget/lines/$id'
     | '/events/$id/record'
+    | '/spending/$id/record'
   id:
     | '__root__'
     | '/'
+    | '/activities'
     | '/budget'
     | '/events'
     | '/settings'
+    | '/spending'
+    | '/activities_/$id'
     | '/budget_/lines/$id'
     | '/events_/$id/record'
+    | '/spending_/$id/record'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivitiesRoute: typeof ActivitiesRoute
   BudgetRoute: typeof BudgetRoute
   EventsRoute: typeof EventsRoute
   SettingsRoute: typeof SettingsRoute
+  SpendingRoute: typeof SpendingRoute
+  ActivitiesIdRoute: typeof ActivitiesIdRoute
   BudgetLinesIdRoute: typeof BudgetLinesIdRoute
   EventsIdRecordRoute: typeof EventsIdRecordRoute
+  SpendingIdRecordRoute: typeof SpendingIdRecordRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -115,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activities': {
+      id: '/activities'
+      path: '/activities'
+      fullPath: '/activities'
+      preLoaderRoute: typeof ActivitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/budget': {
@@ -138,6 +197,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/spending': {
+      id: '/spending'
+      path: '/spending'
+      fullPath: '/spending'
+      preLoaderRoute: typeof SpendingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activities_/$id': {
+      id: '/activities_/$id'
+      path: '/activities/$id'
+      fullPath: '/activities/$id'
+      preLoaderRoute: typeof ActivitiesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/budget_/lines/$id': {
       id: '/budget_/lines/$id'
       path: '/budget/lines/$id'
@@ -152,16 +225,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventsIdRecordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/spending_/$id/record': {
+      id: '/spending_/$id/record'
+      path: '/spending/$id/record'
+      fullPath: '/spending/$id/record'
+      preLoaderRoute: typeof SpendingIdRecordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivitiesRoute: ActivitiesRoute,
   BudgetRoute: BudgetRoute,
   EventsRoute: EventsRoute,
   SettingsRoute: SettingsRoute,
+  SpendingRoute: SpendingRoute,
+  ActivitiesIdRoute: ActivitiesIdRoute,
   BudgetLinesIdRoute: BudgetLinesIdRoute,
   EventsIdRecordRoute: EventsIdRecordRoute,
+  SpendingIdRecordRoute: SpendingIdRecordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

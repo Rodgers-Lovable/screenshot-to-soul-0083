@@ -4,11 +4,11 @@ import { driver, type Driver, type DriveStep, type Side } from "driver.js";
 import { supabase } from "@/integrations/supabase/client";
 import { useBudgetData } from "@/data/hooks";
 
-type Path = "/" | "/budget" | "/events" | "/settings";
+type Path = "/" | "/activities" | "/budget" | "/spending" | "/settings";
 type TourStep = { path: Path; el?: string; title: string; body: string; side?: Side };
 
 // Bump the version when the steps change so everyone sees the new tour once.
-const SEEN_KEY = "tour:v1:";
+const SEEN_KEY = "tour:v3:";
 
 const nav = (k: string) =>
   window.matchMedia("(min-width: 768px)").matches
@@ -56,63 +56,83 @@ function tourSteps(): TourStep[] {
       side: "bottom",
     },
     {
-      path: "/budget",
-      el: nav("budget"),
-      title: "Budget",
-      body: "Every planned cost, grouped by component and line.",
+      path: "/",
+      el: at("year-switcher"),
+      title: "Workplan year",
+      body: "Each year has its own workplan and budget. Switch years here. A closed year can be viewed but not changed.",
+      side: "bottom",
+    },
+    {
+      path: "/activities",
+      el: nav("activities"),
+      title: "Activities",
+      body: "The workplan: objectives, outcomes and the activities under them. Open an activity to track its rounds, and to add indicators, responsible people and sites.",
+    },
+    {
+      path: "/activities",
+      el: at("activities-tree"),
+      title: "Objectives, outcomes and activities",
+      body: "Add and reorder items, search, and filter by kind or status. Each activity shows its status and how many rounds are done, such as 2 of 5. Open an activity to create its rounds, set each round's status and add proof.",
+      side: "top",
     },
     {
       path: "/budget",
-      el: at("budget-component"),
-      title: "Components and lines",
+      el: nav("budget"),
+      title: "Budget",
+      body: "Every planned cost, grouped by objective, outcome and activity.",
+    },
+    {
+      path: "/budget",
+      el: at("budget-objective"),
+      title: "Objectives and lines",
       body: "Each line shows quantity, unit cost and how often it happens. Planned, actual and remaining update as spending is recorded. Click a line to open its details.",
       side: "top",
     },
     {
       path: "/budget",
-      el: at("budget-add-component"),
-      title: "Add a component",
-      body: "Creates a new component. Use Add line in a component's header to add costs to it.",
+      el: at("budget-add-line"),
+      title: "Add a line",
+      body: "Adds a cost to that activity. Activities without lines show as unfunded. Use the line menu to move a line to another activity.",
       side: "bottom",
     },
     {
-      path: "/events",
-      el: nav("events"),
-      title: "Events",
-      body: "The dated activities behind each line. Most day-to-day work happens here.",
+      path: "/spending",
+      el: nav("spending"),
+      title: "Spending",
+      body: "The dated spending records behind each budget line. Most day-to-day work happens here.",
     },
     {
-      path: "/events",
-      el: at("events-view"),
+      path: "/spending",
+      el: at("spending-view"),
       title: "Three views",
-      body: "See events grouped by line, as a single list, or on a calendar.",
+      body: "See records grouped by line, as a single list, or on a calendar.",
       side: "bottom",
     },
     {
-      path: "/events",
-      el: at("events-tabs"),
+      path: "/spending",
+      el: at("spending-tabs"),
       title: "Needs action",
       body: "These tabs sort events by status. Needs action collects events that are overdue, have no date yet, or are missing evidence.",
       side: "bottom",
     },
     {
-      path: "/events",
-      el: at("events-filters"),
+      path: "/spending",
+      el: at("spending-filters"),
       title: "Filters",
-      body: "Narrow the list by component, line, month or flag, or search by name.",
+      body: "Narrow the list by activity, round, line, month or flag, or search by name. A spending record can be linked to a round of the same activity.",
       side: "bottom",
     },
     {
       path: "/settings",
       el: nav("settings"),
       title: "Settings",
-      body: "Period details, Excel import and export, the audit log and your team.",
+      body: "Years, sites, Excel import and export, the audit log and your team.",
     },
     {
       path: "/settings",
       el: at("settings-tabs"),
-      title: "Period, import and export",
-      body: "Set the period dates and exchange rate, load a budget from Excel, export reports, and see who changed what in the audit log.",
+      title: "Years, import and export",
+      body: "Manage years and sites, load a budget from Excel, export reports, and see who changed what in the audit log.",
       side: "bottom",
     },
     {

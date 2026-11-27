@@ -1,3 +1,4 @@
+import { isOneOff } from "@/lib/budget-tree";
 import { useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -5,22 +6,40 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { Download, Eye, FileUp, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useYear } from "./active-year-context";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAddAttachment, useBudgetData, useRemoveAttachment, useUpdateEvent } from "@/data/hooks";
+import { format, parseISO } from "date-fns";
+import {
+  useAddAttachment,
+  useBudgetData,
+  useRemoveAttachment,
+  useUpdateDelivery,
+  useUpdateEvent,
+  useWorkplan,
+} from "@/data/hooks";
 import { eventFigures, eventPlanned } from "@/lib/calc";
+import { groupByRound, offerRoundDone, roundText } from "@/lib/deliveries";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { StatusChip } from "./chips";
-import { Money, useFmt } from "./currency";
+import { Money, useFmt, Variance } from "./currency";
 
 const schema = z.object({
   actualDate: z.string().min(1, "Date required"),
@@ -36,6 +55,7 @@ type FormOut = z.output<typeof schema>;
 const ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx";
 const OK_TYPES = /\.(pdf|jpe?g|png|xlsx)$/i;
 const MAX = 10 * 1024 * 1024;
+const NO_DELIVERY = "__none";
 const unitWord = (u: string, n: number) =>
   u === "pax" ? (n === 1 ? "participant" : "participants") : u;
 
@@ -49,16 +69,36 @@ export function RecordActualsForm({ eventId, onDone }: { eventId: string; onDone
 }
 
 function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone?: () => void }) {
-  const { attachments } = useBudgetData();
+  const data = useBudgetData();
+  const { attachments } = data;
   const files = attachments.filter((a) => a.eventId === ev.id);
   const f = useFmt();
+  const { canEdit, closed } = useYear();
   const update = useUpdateEvent();
   const addAtt = useAddAttachment();
   const rmAtt = useRemoveAttachment();
   const [pending, setPending] = useState<{ file: File; label: string }[]>([]);
   const [drag, setDrag] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [deliveryId, setDeliveryId] = useState(ev.deliveryId ?? NO_DELIVERY);
+  const wp = useWorkplan();
+  const siteOf = (id?: string) => wp.data?.sites.find((x) => x.id === id)?.name;
+  // A site activity's round already names the site; keep an old location visible.
+  const showLocation =
+    data.activities.find((a) => a.id === line.activityId)?.kind !== "site" || !!ev.location;
+  const choices = groupByRound(
+    data.deliveries.filter((x) => x.activityId === line.activityId),
+    (id) => siteOf(id) ?? "",
+  ).flatMap((g) => g.items);
   const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState<"save" | "done" | "cancel" | "reopen" | null>(null);
+  const updRound = useUpdateDelivery();
+  const [offer, setOffer] = useState<{ id: string; name: string; date: string } | null>(null);
+  const roundName = (id: string) => {
+    const x = data.deliveries.find((d) => d.id === id);
+    if (!x) return "";
+    return `${roundText(x)}${x.siteId ? ` at ${siteOf(x.siteId) ?? "a site"}` : ""}`;
+  };
   const inputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<FormIn, unknown, FormOut>({
@@ -96,9 +136,9 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
         `${Math.abs(dq)} ${dq > 0 ? "fewer" : "more"} ${unitWord(line.quantityUnit, Math.abs(dq))} than planned`,
       );
     const dd = line.duration - d;
-    if (dd && line.durationUnit !== "one-off")
+    if (dd && !isOneOff(line.durationUnit))
       parts.push(
-        `${Math.abs(dd)} ${dd > 0 ? "fewer" : "more"} ${line.durationUnit === "days" ? "day(s)" : "month(s)"}`,
+        `${Math.abs(dd)} ${dd > 0 ? "fewer" : "more"} ${line.durationUnit === "days" ? "day(s)" : line.durationUnit === "months" ? "month(s)" : line.durationUnit}`,
       );
     const dr = line.unitCostCents - kesToCents(Number(w.unitCost) || 0);
     if (dr) parts.push(`unit cost ${f.primary(Math.abs(dr))} ${dr > 0 ? "lower" : "higher"}`);
@@ -107,7 +147,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   })();
 
   function addFiles(list: FileList | null) {
-    if (!list) return;
+    if (!list || !canEdit) return;
     const next: { file: File; label: string }[] = [];
     for (const file of Array.from(list)) {
       if (!OK_TYPES.test(file.name)) {
@@ -124,11 +164,25 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   }
 
   async function uploadPending() {
+    if (!canEdit) return 0;
     for (const p of pending)
-      await addAtt.mutateAsync({ eventId: ev.id, file: p.file, label: p.label || undefined });
+      await addAtt.mutateAsync({
+        target: { eventId: ev.id },
+        file: p.file,
+        label: p.label || undefined,
+      });
     const n = pending.length;
     setPending([]);
     return n;
+  }
+
+  async function run(which: NonNullable<typeof busy>, work: () => Promise<void>) {
+    setBusy(which);
+    try {
+      await work();
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function save(status: EventStatus, extraNotes?: string) {
@@ -147,6 +201,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           actualUnitCostCents: kesToCents(v.unitCost),
           actualDuration: v.duration,
           location: v.location || undefined,
+          deliveryId: deliveryId === NO_DELIVERY ? undefined : deliveryId,
           notes:
             extraNotes !== undefined
               ? [v.notes, `Cancelled: ${extraNotes}`].filter(Boolean).join("\n")
@@ -161,15 +216,39 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
         toast.success(
           status === "done" ? "Marked done" : status === "cancelled" ? "Event cancelled" : "Saved",
         );
+      const round = data.deliveries.find((d) => d.id === deliveryId);
+      if (round && offerRoundDone(status, round, v.actualDate)) {
+        setOffer({ id: round.id, name: roundName(round.id), date: v.actualDate });
+        return;
+      }
       onDone?.();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save");
+    } catch {
+      // The mutation hook already showed the error.
+    }
+  }
+
+  async function markRoundDone() {
+    if (!offer) return;
+    try {
+      await updRound.mutateAsync({
+        id: offer.id,
+        patch: { status: "completed", actualDate: offer.date },
+      });
+      toast.success(`${offer.name} marked done. Add proof it happened on the activity page.`);
+      setOffer(null);
+      onDone?.();
+    } catch {
+      // The mutation hook already showed the error.
     }
   }
 
   async function reopen() {
-    await update.mutateAsync({ id: ev.id, patch: { status: "planned" } });
-    toast.success("Event reopened");
+    try {
+      await update.mutateAsync({ id: ev.id, patch: { status: "planned" } });
+      toast.success("Event reopened");
+    } catch {
+      // The mutation hook already showed the error.
+    }
   }
 
   const num = (name: "quantity" | "unitCost" | "duration", label: string, suffix: string) => (
@@ -193,7 +272,12 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   );
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={!canEdit} className="min-w-0 space-y-5 border-0 p-0">
+      {closed && (
+        <p className="rounded-md border bg-muted px-3 py-2 text-sm">
+          This year is closed. Actuals and evidence can be viewed but not changed.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <StatusChip status={ev.status} />
         <span className="text-sm text-muted-foreground">
@@ -224,9 +308,32 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           {num("quantity", "Quantity", line.quantityUnit)}
           {num("unitCost", "Unit cost", "KES")}
           {num("duration", "Duration", line.durationUnit)}
+          {showLocation && (
+            <div className="space-y-1 sm:col-span-2">
+              <Label htmlFor="location">Location</Label>
+              <Input id="location" {...form.register("location")} />
+            </div>
+          )}
           <div className="space-y-1 sm:col-span-2">
-            <Label htmlFor="location">Location</Label>
-            <Input id="location" {...form.register("location")} />
+            <Label>For round</Label>
+            <Select value={deliveryId} onValueChange={setDeliveryId}>
+              <SelectTrigger aria-label="For round">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_DELIVERY}>Not tied to a round</SelectItem>
+                {choices.map((x) => (
+                  <SelectItem key={x.id} value={x.id}>
+                    {roundText(x)}
+                    {x.siteId ? ` at ${siteOf(x.siteId) ?? "a site"}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Optional. Only rounds of this line&apos;s activity are listed. Linking does not change
+              any amounts.
+            </p>
           </div>
           <div className="space-y-1 sm:col-span-2">
             <Label htmlFor="notes">Notes</Label>
@@ -238,9 +345,9 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
       <section className="rounded-md border p-3" aria-live="polite">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Fig label="Actual amount" cents={live.actual} />
-          <Fig label="Variance" cents={live.variance} signed tone />
-          <Fig label="Volume variance" cents={live.volumeVariance} signed tone />
-          <Fig label="Rate variance" cents={live.rateVariance} signed tone />
+          <Fig label="Variance" cents={live.variance} variance />
+          <Fig label="Volume variance" cents={live.volumeVariance} variance />
+          <Fig label="Rate variance" cents={live.rateVariance} variance />
         </div>
         <p className="mt-2 text-sm text-muted-foreground">{explain}</p>
       </section>
@@ -337,13 +444,20 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
 
       <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-end">
         {ev.status !== "planned" && (
-          <Button variant="outline" onClick={reopen}>
+          <Button
+            variant="outline"
+            loading={busy === "reopen"}
+            disabled={!!busy}
+            onClick={() => run("reopen", reopen)}
+          >
             Reopen
           </Button>
         )}
         {ev.status !== "cancelled" && (
           <Button
             variant="outline"
+            loading={busy === "cancel"}
+            disabled={!!busy}
             onClick={() => {
               setReason("");
               setCancelOpen(true);
@@ -352,10 +466,19 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
             Mark cancelled
           </Button>
         )}
-        <Button variant="secondary" onClick={() => save(ev.status === "done" ? "done" : "planned")}>
+        <Button
+          variant="secondary"
+          loading={busy === "save"}
+          disabled={!!busy}
+          onClick={() => run("save", () => save(ev.status === "done" ? "done" : "planned"))}
+        >
           Save without completing
         </Button>
-        <Button onClick={() => save("done")} disabled={update.isPending}>
+        <Button
+          loading={busy === "done"}
+          disabled={!!busy}
+          onClick={() => run("done", () => save("done"))}
+        >
           Mark done
         </Button>
       </div>
@@ -376,7 +499,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
               disabled={!reason.trim()}
               onClick={() => {
                 setCancelOpen(false);
-                void save("cancelled", reason.trim());
+                void run("cancel", () => save("cancelled", reason.trim()));
               }}
             >
               Mark cancelled
@@ -384,25 +507,51 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+
+      <Dialog
+        open={!!offer}
+        onOpenChange={(o) => {
+          if (!o && !updRound.isPending) {
+            setOffer(null);
+            onDone?.();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark {offer?.name} done too?</DialogTitle>
+            <DialogDescription>
+              This spending is for that round. It will be marked done with{" "}
+              {offer ? format(parseISO(offer.date), "d MMM yyyy") : ""} as the date it took place.
+              Proof and indicator results are still added on the activity page.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={updRound.isPending}
+              onClick={() => {
+                setOffer(null);
+                onDone?.();
+              }}
+            >
+              Not now
+            </Button>
+            <Button loading={updRound.isPending} onClick={markRoundDone}>
+              Mark round done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </fieldset>
   );
 }
 
-function Fig({
-  label,
-  cents,
-  signed,
-  tone,
-}: {
-  label: string;
-  cents: number;
-  signed?: boolean;
-  tone?: boolean;
-}) {
+function Fig({ label, cents, variance }: { label: string; cents: number; variance?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-2">
       <span className="text-muted-foreground">{label}</span>
-      <Money cents={cents} signed={signed} tone={tone ? "auto" : undefined} />
+      {variance ? <Variance cents={cents} /> : <Money cents={cents} />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Study Budget Tracker
 
-Tracks a project budget in Kenyan shillings. Plan components and budget lines, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
+Tracks a project budget in Kenyan shillings. Plan each year's objectives, outcomes and activities, put budget lines under each activity, split each line into events, record what every event actually cost, and attach evidence. The dashboard shows burn rate and spend against plan.
 
 Built with TanStack Start, React 19, Tailwind v4 and shadcn/ui. Data, sign-in and evidence files live in a Supabase project.
 
@@ -30,9 +30,31 @@ You need Node 24 (`nvm use` reads `.nvmrc`), npm and a Supabase project. npm is 
    npm run dev
    ```
 
-The first person to sign in claims the team and becomes admin. Admins can make other members admins, and the team always keeps at least one. Everyone else signs up, then a team member adds them under Settings, Team. An account that has not been added sees a waiting screen.
+One app holds many studies, each with its own budget, evidence and team. Only platform admins can create a study, and they become its admin. Everyone else signs up, then a study admin adds their email under Settings, Team; the study then appears in the switcher. Study admins also remove people and make other members admins, and a study always keeps at least one admin. Someone who has not been added to any study sees a "Waiting for access" screen, not the data. Platform admins see no study's data unless they are on its team.
 
-On their first visit, each team member gets a short tour of the Dashboard, Budget, Events and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
+To make someone a platform admin, they sign up first. Then run this once in the Supabase SQL Editor, with their sign-up email in place of the placeholder:
+
+```sql
+insert into public.platform_admins (user_id)
+select id from auth.users where email = 'person@example.org';
+```
+
+The list has no client access, so the SQL Editor (or the service role) is the only way to change it.
+
+On their first visit, each team member gets a short tour of the Dashboard, Activities, Budget, Spending and Settings pages. The help button in the header runs it again. The steps live in `src/components/app/tour.tsx`. After changing them, bump the version in its `SEEN_KEY` so everyone sees the new tour once.
+
+## Workplan years
+
+Each study plans and budgets by year. A year (Settings, Years) has its own dates, exchange rate, currency, workplan and budget. The year switcher in the header changes which year every page shows; the choice is remembered per study.
+
+- Only study admins create years, edit a year's dates and exchange rate, close or reopen a year, and manage the study's site list (Settings, Sites). A study with no year asks an admin to create the first one.
+- Start a new year blank, or from an earlier year. New years default to the financial year, 30 September to 29 September, and the dates stay editable. Copying brings over objectives, outcomes, activities, indicators, responsible people and site choices. Tick Include budget lines to copy the lines too, each with fresh planned records. Rounds, spending, actuals, finance postings, receipts and evidence are never copied. Years cannot overlap.
+- A closed year is read-only for everyone: workplan, budget lines, spending, actuals and evidence. The database enforces this, not just the screens. Only an admin can reopen it, and both actions go in the audit log.
+- Every budget line belongs to one activity. The Budget page groups lines by objective, outcome and activity with subtotals; activities without lines show as unfunded. A line can be moved to another activity of the same year, never to another year. An activity that has lines cannot be deleted until its lines are moved. Units are free text, with suggestions from standard values and the ones already used in the year.
+- Rounds track whether an activity took place, separately from spending. The UI calls them rounds; the tables are `deliveries` and `delivery_indicator_results`. Open an activity and use Create rounds: pick how many rounds and an optional first date (spaced by the activity's repeat rule when it has one), check the preview, and confirm. A site activity gets each round at every chosen site, a general activity one per round. Running it again only adds what is missing. Ad hoc work uses Add one. Each round has a status (Not started, Ongoing, Done), dates, notes, proof files, indicator results and optional links to spending records from the same activity. Marking a round done needs the date it took place, and a done round with no proof is flagged. An activity's status is calculated from its rounds: none started is Not started, all done is Done, anything else is Ongoing. The Activities page shows it with a count such as 2 of 5 and can filter by status.
+- A round that will no longer happen is deleted, and the deletion is audited. Deleting is blocked while spending is linked or proof files exist, so remove those first. Activities, outcomes and objectives with rounds cannot be deleted, an activity with rounds cannot change between general and site, and a site cannot be removed from it while rounds exist there. Archiving a site keeps its rounds visible. New years never copy rounds, results, proof or links.
+- Proof that a round happened uploads to `<studyId>/deliveries/<deliveryId>/` in the evidence bucket; spending receipts keep their existing paths. The Spending page shows the linked round on each record, can filter by round, and the record form can link a record to a round of the same activity. Linking never changes amounts. Marking a linked record done asks whether to mark its round done on the same date too; proof and indicator results are still added on the round. A proof file's label suggests the activity's means of verification; press Tab in the empty label to use it.
+- Pages: Activities (`/activities`) is the workplan tree, with a detail page per activity (`/activities/:id`) for rounds, budget lines, indicators, responsible people and sites. Spending (`/spending`) is the old Events page; `/events` links still redirect to it.
 
 ## Scripts
 

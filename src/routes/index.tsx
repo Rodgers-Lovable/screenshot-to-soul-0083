@@ -1,3 +1,4 @@
+import { activityLabel, buildBudgetTree } from "@/lib/budget-tree";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import {
@@ -32,7 +33,7 @@ import { pct, todayISO } from "@/lib/format";
 import { Money, useFmt } from "@/components/app/currency";
 import { Flags } from "@/components/app/chips";
 import { PageHeader, useRecord } from "@/components/app/shell";
-import type { EventsSearch } from "./events";
+import type { SpendingSearch } from "./spending";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,16 +64,13 @@ function Dashboard() {
     const lineSums = new Map(d.lines.map((l) => [l.id, lineSummary(l, d.events)]));
     const total = sumSummaries([...lineSums.values()]);
     const burn = burnRate(d.period, d.lines, d.events, today);
-    const comp = d.components.map((c) => {
-      const s = sumSummaries(
-        d.lines.filter((l) => l.componentId === c.id).map((l) => lineSums.get(l.id)!),
-      );
-      return {
-        name: `${c.code}. ${c.name}`,
-        planned: s.planned / 100,
-        actual: s.actualToDate / 100,
-      };
-    });
+    const comp = buildBudgetTree(d.objectives, d.outcomes, d.activities, d.lines, d.events).map(
+      (o) => ({
+        name: activityLabel(o.objective),
+        planned: o.summary.planned / 100,
+        actual: o.summary.actualToDate / 100,
+      }),
+    );
     const series = cumulativeByMonth(d.period, d.lines, d.events).map((p) => ({
       month: p.month,
       label: format(parseISO(p.month + "-01"), "MMM yy"),
@@ -199,7 +197,7 @@ function Dashboard() {
         </Card>
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Planned vs actual by component</CardTitle>
+            <CardTitle className="text-base">Planned vs actual by objective</CardTitle>
           </CardHeader>
           <CardContent className="h-56">
             <ResponsiveContainer>
@@ -375,7 +373,7 @@ function WorkList({
 }: {
   title: string;
   count: number;
-  search: EventsSearch;
+  search: SpendingSearch;
   children: React.ReactNode;
 }) {
   return (
@@ -385,7 +383,7 @@ function WorkList({
           {title}
           <Badge variant="secondary">{count}</Badge>
         </CardTitle>
-        <Link to="/events" search={search} className="text-sm text-primary hover:underline">
+        <Link to="/spending" search={search} className="text-sm text-primary hover:underline">
           View all
         </Link>
       </CardHeader>

@@ -1,18 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarClock, ChevronRight, Info, Pencil } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  ChevronRight,
+  Info,
+  Loader2,
+  MoveRight,
+  Pencil,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudgetData, useUpdateLine } from "@/data/hooks";
 import { actualInputs, eventFigures, eventFlags, lineFlags, lineSummary } from "@/lib/calc";
 import { formulaShort, kesToCents, pct, todayISO } from "@/lib/format";
-import { Money, useFmt } from "@/components/app/currency";
+import { Money, useFmt, Variance } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
+import { MoveLineDialog } from "@/components/app/move-line-dialog";
+import { activityLabel } from "@/lib/budget-tree";
 import { useRecord } from "@/components/app/shell";
+import { useYear } from "@/components/app/active-year-context";
 import { Truncated } from "@/components/app/truncated";
 import { ScheduleDialog } from "@/components/app/schedule-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -37,9 +49,13 @@ function LineDetail() {
   const { id } = Route.useParams();
   const d = useBudgetData();
   const f = useFmt();
+  const dir = (c: number) =>
+    c ? `${f.primary(Math.abs(c))} ${c > 0 ? "under" : "over"}` : "on plan";
   const { open } = useRecord();
+  const { canEdit } = useYear();
   const [edit, setEdit] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+  const [moving, setMoving] = useState(false);
   const line = d.lines.find((l) => l.id === id);
   const events = useMemo(
     () => d.events.filter((e) => e.lineId === id).sort((a, b) => a.sequence - b.sequence),
@@ -56,7 +72,7 @@ function LineDetail() {
         </Link>
       </p>
     );
-  const comp = d.components.find((c) => c.id === line.componentId);
+  const act = d.activities.find((a) => a.id === line.activityId);
   const today = todayISO();
 
   return (
@@ -73,10 +89,16 @@ function LineDetail() {
             <ArrowLeft className="h-4 w-4" />
             Budget
           </Link>
-          {comp && (
+          {act && (
             <>
               <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              <Truncated text={`${comp.code}. ${comp.name}`} className="max-w-xs" />
+              <Link
+                to="/activities/$id"
+                params={{ id: act.id }}
+                className="min-w-0 hover:text-foreground"
+              >
+                <Truncated text={activityLabel(act)} className="max-w-xs" />
+              </Link>
             </>
           )}
           {line.groupLabel && (
@@ -110,12 +132,16 @@ function LineDetail() {
           </div>
           <div className="flex gap-2">
             {events.some((e) => e.status === "planned") && (
-              <Button variant="outline" onClick={() => setScheduling(true)}>
+              <Button variant="outline" disabled={!canEdit} onClick={() => setScheduling(true)}>
                 <CalendarClock className="h-4 w-4" />
                 Schedule
               </Button>
             )}
-            <Button variant="outline" onClick={() => setEdit(true)}>
+            <Button variant="outline" disabled={!canEdit} onClick={() => setMoving(true)}>
+              <MoveRight className="h-4 w-4" />
+              Move
+            </Button>
+            <Button variant="outline" disabled={!canEdit} onClick={() => setEdit(true)}>
               <Pencil className="h-4 w-4" />
               Edit line
             </Button>
@@ -137,9 +163,9 @@ function LineDetail() {
 
       <Card className="grid grid-cols-2 gap-x-6 gap-y-3 p-4 md:grid-cols-4">
         <Minor label="Variance on completed">
-          <Money cents={s.varianceOnCompleted} signed tone="auto" className="items-start!" />
+          <Variance cents={s.varianceOnCompleted} className="items-start!" />
           <p className="text-xs text-muted-foreground tabular-nums">
-            Volume {f.primary(s.volumeVariance)} · Rate {f.primary(s.rateVariance)}
+            Volume {dir(s.volumeVariance)} · Rate {dir(s.rateVariance)}
           </p>
         </Minor>
         <Minor label="Still to spend">
@@ -201,13 +227,11 @@ function LineDetail() {
                     <td className="num">{done ? f.kes(a.r1) : ""}</td>
                     <td className="num">{done ? a.d1 : ""}</td>
                     <td className="text-right">{done && <Money cents={fig.actual} />}</td>
-                    <td className="text-right">
-                      {done && <Money cents={fig.variance} signed tone="auto" />}
-                    </td>
+                    <td className="text-right">{done && <Variance cents={fig.variance} />}</td>
                     <td className="num">{n}</td>
                     <td>
                       <Button size="sm" variant="outline" onClick={() => open(e.id)}>
-                        Record
+                        {canEdit ? "Record" : "View"}
                       </Button>
                     </td>
                   </tr>
@@ -220,6 +244,7 @@ function LineDetail() {
 
       <FinanceCard lineId={line.id} posted={line.financePostedCents} reported={s.actualToDate} />
       <LineEditor open={edit} onOpenChange={setEdit} line={line} />
+      <MoveLineDialog line={moving ? line : null} onClose={() => setMoving(false)} />
       <ScheduleDialog
         line={scheduling ? line : null}
         events={events}
@@ -277,6 +302,7 @@ function FinanceCard({
   reported: number;
 }) {
   const upd = useUpdateLine();
+  const { canEdit } = useYear();
   const [val, setVal] = useState(posted !== undefined ? String(posted / 100) : "");
   const p = posted ?? 0;
   return (
@@ -287,30 +313,46 @@ function FinanceCard({
       <CardContent className="grid gap-4 sm:grid-cols-4 sm:items-end">
         <div className="space-y-1">
           <Label htmlFor="fin">Finance-posted amount (KES)</Label>
-          <Input
-            id="fin"
-            type="number"
-            step="any"
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            onBlur={() => {
-              const c = val === "" ? undefined : kesToCents(Number(val));
-              if (c !== posted)
-                upd.mutate(
-                  { id: lineId, patch: { financePostedCents: c } },
-                  { onSuccess: () => toast.success("Finance figure saved") },
-                );
-            }}
-          />
+          <div className="relative">
+            <Input
+              id="fin"
+              disabled={!canEdit || upd.isPending}
+              aria-busy={upd.isPending}
+              className={cn(upd.isPending && "pr-9")}
+              type="number"
+              step="any"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              onBlur={() => {
+                const c = val === "" ? undefined : kesToCents(Number(val));
+                if (c !== posted)
+                  upd.mutate(
+                    { id: lineId, patch: { financePostedCents: c } },
+                    { onSuccess: () => toast.success("Finance figure saved") },
+                  );
+              }}
+            />
+            {upd.isPending && (
+              <Loader2
+                className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                aria-hidden
+              />
+            )}
+          </div>
+          {upd.isPending && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Saving…
+            </p>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Reported actual</p>
-          <Money cents={reported} className="!items-start" />
+          <Money cents={reported} className="items-start!" />
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Difference (finance − reported)</p>
           {posted !== undefined ? (
-            <Money cents={p - reported} signed className="!items-start" />
+            <Money cents={p - reported} signed className="items-start!" />
           ) : (
             <span className="text-sm text-muted-foreground">—</span>
           )}

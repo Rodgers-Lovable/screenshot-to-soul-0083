@@ -40,8 +40,11 @@ export function todayISO(): string {
 }
 
 export function durationLabel(d: number, unit: string) {
-  if (unit === "one-off") return "one-off";
-  return `${d} ${unit === "days" ? (d === 1 ? "day" : "days") : d === 1 ? "month" : "months"}`;
+  const u = unit.trim();
+  if (u.toLowerCase() === "one-off") return "one-off";
+  if (u === "days") return `${d} ${d === 1 ? "day" : "days"}`;
+  if (u === "months") return `${d} ${d === 1 ? "month" : "months"}`;
+  return `${d} ${u}`;
 }
 
 /** Short cost formula for headers: skips "× 1" parts, e.g. "71 pax × KES 500 × 12 months". */
@@ -56,7 +59,7 @@ export function formulaShort(
     formatKES(l.unitCostCents),
   ];
   const monthly = l.durationUnit === "months" && l.duration === 1;
-  if (l.durationUnit !== "one-off" && !monthly && l.duration !== 1)
+  if (l.durationUnit.trim().toLowerCase() !== "one-off" && !monthly && l.duration !== 1)
     parts.push(durationLabel(l.duration, l.durationUnit));
   else if (l.durationUnit === "days" && l.duration === 1) parts.push("1 day");
   if (l.occurrences > 1) parts.push(monthly ? `${l.occurrences} months` : `${l.occurrences} times`);

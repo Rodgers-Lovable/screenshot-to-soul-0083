@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { makeSeed } from "@/test/demo-budget";
 import {
   burnRate,
+  eventPlanned,
+  periodMonths,
   eventFigures,
   eventFlags,
   lineFlags,
@@ -15,11 +17,11 @@ import {
   scheduleDates,
 } from "./calc";
 import { formatKES, formatUSD, formulaShort, parseMoney } from "./format";
-import type { BudgetEvent, BudgetLine } from "./types";
+import type { BudgetEvent, BudgetLine, BudgetPeriod } from "./types";
 
 const line = (p: Partial<BudgetLine> = {}): BudgetLine => ({
   id: "L",
-  componentId: "c",
+  activityId: "a",
   description: "x",
   quantity: 25,
   quantityUnit: "pax",
@@ -141,6 +143,8 @@ describe("burn rate", () => {
     startDate: "2026-01-01",
     endDate: "2026-12-31",
     fxRate: 125,
+    currency: "KES",
+    status: "open" as const,
   };
   const l = line({ occurrences: 2 });
   it("behind plan when spent is >10pp lower", () => {
@@ -322,5 +326,57 @@ describe("excel import parsing", () => {
       durationUnit: "days",
     });
     expect(rows[1].unitCost).toBe(923);
+  });
+});
+
+describe("a 30 September to 29 September year", () => {
+  const per = (startDate: string, endDate: string) =>
+    ({
+      id: "p",
+      projectName: "",
+      name: "",
+      startDate,
+      endDate,
+      fxRate: 1,
+      currency: "KES",
+      status: "open",
+    }) as BudgetPeriod;
+  it("has 12 months, October to September", () => {
+    const m = periodMonths(per("2026-09-30", "2027-09-29"));
+    expect(m).toHaveLength(12);
+    expect(m[0]).toBe("2026-10");
+    expect(m[11]).toBe("2027-09");
+    expect(new Set(m).size).toBe(12);
+  });
+  it("has 12 months across a leap day", () => {
+    const m = periodMonths(per("2027-09-30", "2028-09-29"));
+    expect(m).toHaveLength(12);
+    expect(m).toContain("2028-02");
+  });
+  it("counts activity on 30 Sep and 29 Sep inside the year", () => {
+    const p = per("2026-09-30", "2027-09-29");
+    const l = line({ id: "l", occurrences: 3 });
+    const ev = (id: string, d: string): BudgetEvent => ({
+      id,
+      lineId: "l",
+      sequence: 1,
+      title: "t",
+      status: "planned",
+      plannedDate: d,
+    });
+    const series = cumulativeByMonth(
+      p,
+      [l],
+      [ev("a", "2026-09-30"), ev("b", "2027-09-29"), ev("c", "2027-01-10")],
+    );
+    const one = eventPlanned(l);
+    expect(series).toHaveLength(12);
+    expect(series[0]!.planned).toBe(one);
+    expect(series[11]!.planned).toBe(3 * one);
+  });
+  it("measures time elapsed over the 364 days", () => {
+    const p = per("2026-09-30", "2027-09-29");
+    expect(burnRate(p, [], [], "2026-09-30").timeElapsedPct).toBe(0);
+    expect(burnRate(p, [], [], "2027-09-29").timeElapsedPct).toBe(1);
   });
 });

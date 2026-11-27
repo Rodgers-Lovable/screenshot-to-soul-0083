@@ -1,7 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Download, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Download,
+  Lock,
+  LockOpen,
+  Pencil,
+  Plus,
+  Upload,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,8 +38,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAudit, useBudgetData, useImportLines, useUpdatePeriod } from "@/data/hooks";
 import {
+  useAddSite,
+  useArchiveSite,
+  useAudit,
+  useBudgetData,
+  useImportLines,
+  useRenameSite,
+  useSetYearStatus,
+  useUpdatePeriod,
+  useWorkplan,
+} from "@/data/hooks";
+import {
+  downloadImportTemplate,
   exportWorkbook,
   parseBudgetRows,
   readWorkbook,
@@ -36,25 +61,27 @@ import { formatKES, kesToCents, todayISO } from "@/lib/format";
 import { clamp, daysBetween, periodSummary } from "@/lib/calc";
 import { Progress } from "@/components/ui/progress";
 import { Money } from "@/components/app/currency";
-import {
-  DURATION_UNITS,
-  QUANTITY_UNITS,
-  type BudgetPeriod,
-  type DurationUnit,
-  type QuantityUnit,
-} from "@/lib/types";
+import { DURATION_UNITS, QUANTITY_UNITS, type BudgetPeriod } from "@/lib/types";
+import { activityOptions, unitSuggestions } from "@/lib/budget-tree";
+import { ActivityPicker, UnitInput } from "@/components/app/budget-fields";
 import { PageHeader } from "@/components/app/shell";
 import { TeamPanel } from "@/components/app/team-panel";
+import { useYear } from "@/components/app/active-year-context";
+import { CreateYearDialog } from "@/components/app/create-year-dialog";
+import { prefillYearDates, validateYear } from "@/lib/workplan";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings · Project Budget Tracker" },
-      { name: "description", content: "Period, exchange rate, Excel import/export and audit log." },
+      {
+        name: "description",
+        content: "Years, sites, exchange rate, Excel import/export and audit log.",
+      },
       { property: "og:title", content: "Settings · Project Budget Tracker" },
       {
         property: "og:description",
-        content: "Period, exchange rate, Excel import/export and audit log.",
+        content: "Years, sites, exchange rate, Excel import/export and audit log.",
       },
     ],
   }),
@@ -66,8 +93,10 @@ function SettingsPage() {
     <div>
       <PageHeader title="Settings" />
       <Tabs defaultValue="period">
-        <TabsList className="flex-wrap" data-tour="settings-tabs">
-          <TabsTrigger value="period">Period</TabsTrigger>
+        <TabsList className="h-auto flex-wrap" data-tour="settings-tabs">
+          <TabsTrigger value="period">Year</TabsTrigger>
+          <TabsTrigger value="years">Years</TabsTrigger>
+          <TabsTrigger value="sites">Sites</TabsTrigger>
           <TabsTrigger value="import">Import</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
           <TabsTrigger value="audit">Audit log</TabsTrigger>
@@ -77,6 +106,12 @@ function SettingsPage() {
         </TabsList>
         <TabsContent value="period">
           <PeriodForm />
+        </TabsContent>
+        <TabsContent value="years">
+          <YearsPanel />
+        </TabsContent>
+        <TabsContent value="sites">
+          <SitesPanel />
         </TabsContent>
         <TabsContent value="import">
           <ImportPanel />
@@ -97,30 +132,37 @@ function SettingsPage() {
 
 function PeriodForm() {
   const { period, events } = useBudgetData();
+  const { years, isAdmin, closed, year } = useYear();
   const upd = useUpdatePeriod();
   const blank: BudgetPeriod = {
-    id: "p1",
+    id: "",
     projectName: "",
     name: "",
     startDate: "",
     endDate: "",
     fxRate: 125,
+    currency: "KES",
+    status: "open",
   };
-  const [v, setV] = useState<BudgetPeriod>(period ?? blank);
+  const [v, setV] = useState<BudgetPeriod>(() => prefillYearDates(period ?? blank, todayISO()));
   const [confirmFx, setConfirmFx] = useState(false);
   useEffect(() => {
-    if (period) setV(period);
+    if (period) setV(prefillYearDates(period, todayISO()));
   }, [period]);
+  const readOnly = !isAdmin || closed || !year;
   const anyDone = events.some((e) => e.status === "done");
-  const invalid =
-    !v.projectName.trim() ||
-    !v.name.trim() ||
-    !v.startDate ||
-    !v.endDate ||
-    v.endDate <= v.startDate ||
-    !(v.fxRate > 0);
+  const problem = validateYear(
+    { ...v, currency: v.currency.trim().toUpperCase() },
+    years,
+    year?.id,
+  );
+  const invalid = !!problem || !v.projectName.trim();
 
-  const doSave = () => upd.mutate(v, { onSuccess: () => toast.success("Period saved") });
+  const doSave = () =>
+    upd.mutate(
+      { ...v, currency: v.currency.trim().toUpperCase() },
+      { onSuccess: () => toast.success("Year saved") },
+    );
   const save = () =>
     anyDone && period && v.fxRate !== period.fxRate ? setConfirmFx(true) : doSave();
   const field = (k: keyof BudgetPeriod, label: string, type = "text") => (
@@ -130,7 +172,7 @@ function PeriodForm() {
         id={k}
         type={type}
         step={type === "number" ? "any" : undefined}
-        value={String(v[k])}
+        value={String(v[k] ?? "")}
         onChange={(e) =>
           setV({ ...v, [k]: type === "number" ? Number(e.target.value) : e.target.value })
         }
@@ -141,27 +183,47 @@ function PeriodForm() {
     <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Budget period</CardTitle>
+          <CardTitle className="text-base">Year details</CardTitle>
+          {readOnly && (
+            <CardDescription>
+              {!year
+                ? "There is no year yet. Create one under Years."
+                : closed
+                  ? "This year is closed. Reopen it under Years to change these details."
+                  : "Only study admins can change the dates, exchange rate and currency."}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {field("projectName", "Project name")}
-            {field("name", "Period name")}
-            {field("startDate", "Start date", "date")}
-            {field("endDate", "End date", "date")}
-          </div>
-          <div className="space-y-1">
-            {field("fxRate", "Exchange rate (KES per 1 USD)", "number")}
-            <p className="text-xs text-muted-foreground">
-              Used to convert all KES amounts to USD for display
-            </p>
-          </div>
-          {v.endDate && v.startDate && v.endDate <= v.startDate && (
-            <p className="text-sm text-destructive">End date must be after start date.</p>
-          )}
-          <Button onClick={save} disabled={invalid}>
-            Save period
-          </Button>
+          <fieldset disabled={readOnly} className="min-w-0 space-y-3 border-0 p-0">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {field("projectName", "Project name")}
+              {field("name", "Year name")}
+              {field("startDate", "Start date", "date")}
+              {field("endDate", "End date", "date")}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                {field("fxRate", "Exchange rate to USD", "number")}
+                <p className="text-xs text-muted-foreground">
+                  Used to convert amounts to USD for display
+                </p>
+              </div>
+              {field("currency", "Currency code")}
+            </div>
+            {period && (!period.startDate || !period.endDate) && (
+              <p className="text-xs text-muted-foreground">
+                The dates shown are the suggested financial year, 30 September to 29 September. They
+                are not saved until you save the year.
+              </p>
+            )}
+            {!readOnly && problem && v.name && v.startDate && v.endDate && (
+              <p className="text-sm text-destructive">{problem}</p>
+            )}
+            <Button onClick={save} loading={upd.isPending} disabled={invalid}>
+              Save year
+            </Button>
+          </fieldset>
         </CardContent>
       </Card>
 
@@ -186,15 +248,308 @@ function PeriodForm() {
   );
 }
 
-const NEW = "__new";
+function YearsPanel() {
+  const { years, isAdmin, year, select } = useYear();
+  const setStatus = useSetYearStatus();
+  const [creating, setCreating] = useState(false);
+  const [target, setTarget] = useState<{ id: string; name: string; to: "open" | "closed" } | null>(
+    null,
+  );
+  const sorted = [...years].sort((a, b) => b.startDate.localeCompare(a.startDate));
+  const nameOf = (id?: string) => years.find((y) => y.id === id)?.name;
+  const confirm = () => {
+    if (!target) return;
+    const t = target;
+    setStatus.mutate(
+      { id: t.id, status: t.to },
+      {
+        onSuccess: () =>
+          toast.success(t.to === "closed" ? `${t.name} closed` : `${t.name} reopened`),
+      },
+    );
+    setTarget(null);
+  };
+  return (
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="text-base">Years</CardTitle>
+          <CardDescription>
+            Each year has its own workplan and budget. A closed year is read-only until an admin
+            reopens it.
+            {!isAdmin && " Only study admins can create, close or reopen a year."}
+          </CardDescription>
+        </div>
+        {isAdmin && (
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4" />
+            {years.length ? "Start a new year" : "Create the first year"}
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!sorted.length && <p className="text-sm text-muted-foreground">No years yet.</p>}
+        <ul className="divide-y rounded-md border text-sm">
+          {sorted.map((y) => (
+            <li key={y.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+              <div className="mr-auto min-w-0">
+                <p className="font-medium">
+                  {y.name}
+                  {y.id === year?.id && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">Viewing</span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {y.startDate} to {y.endDate} · {y.currency}
+                  {y.copiedFromId &&
+                    nameOf(y.copiedFromId) &&
+                    ` · Copied from ${nameOf(y.copiedFromId)}`}
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs">
+                {y.status === "closed" ? (
+                  <>
+                    <Lock className="h-3 w-3" aria-hidden />
+                    Closed
+                  </>
+                ) : (
+                  "Open"
+                )}
+              </span>
+              {y.id !== year?.id && (
+                <Button size="sm" variant="ghost" onClick={() => select(y.id)}>
+                  View
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setTarget({
+                      id: y.id,
+                      name: y.name,
+                      to: y.status === "closed" ? "open" : "closed",
+                    })
+                  }
+                >
+                  {y.status === "closed" ? (
+                    <>
+                      <LockOpen className="h-4 w-4" />
+                      Reopen
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      Close
+                    </>
+                  )}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      </CardContent>
+      {isAdmin && <CreateYearDialog open={creating} onOpenChange={setCreating} />}
+      <AlertDialog open={!!target} onOpenChange={(o) => !o && setTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {target?.to === "closed" ? `Close ${target.name}?` : `Reopen ${target?.name}?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {target?.to === "closed"
+                ? "Nobody can add, edit or delete anything in this year, including spending and evidence, until it is reopened."
+                : "Team members can change this year again. The reopening is recorded in the audit log."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirm}>
+              {target?.to === "closed" ? "Close year" : "Reopen year"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
+function SitesPanel() {
+  const { isAdmin } = useYear();
+  const wp = useWorkplan();
+  const add = useAddSite();
+  const rename = useRenameSite();
+  const archive = useArchiveSite();
+  const [name, setName] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [en, setEn] = useState("");
+  const sites = [...(wp.data?.sites ?? [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+  );
+  const active = sites.filter((s) => !s.archivedAt);
+  const archived = sites.filter((s) => s.archivedAt);
+  const row = (s: (typeof sites)[number]) => (
+    <li key={s.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
+      {editing === s.id ? (
+        <>
+          <Input
+            aria-label="Site name"
+            className="min-w-40 flex-1"
+            value={en}
+            onChange={(e) => setEn(e.target.value)}
+          />
+          <Button
+            size="sm"
+            loading={rename.isPending}
+            disabled={!en.trim()}
+            onClick={() =>
+              rename.mutate({ id: s.id, name: en }, { onSuccess: () => setEditing(null) })
+            }
+          >
+            Save
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+            Cancel
+          </Button>
+        </>
+      ) : (
+        <>
+          <span
+            className={`mr-auto min-w-0 break-words ${s.archivedAt ? "text-muted-foreground" : ""}`}
+          >
+            {s.name}
+          </span>
+          {isAdmin && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setEditing(s.id);
+                  setEn(s.name);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+                Rename
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  archive.mutate(
+                    { id: s.id, archived: !s.archivedAt },
+                    {
+                      onSuccess: () =>
+                        toast.success(s.archivedAt ? "Site restored" : "Site archived"),
+                    },
+                  )
+                }
+              >
+                {s.archivedAt ? (
+                  <>
+                    <ArchiveRestore className="h-4 w-4" />
+                    Restore
+                  </>
+                ) : (
+                  <>
+                    <Archive className="h-4 w-4" />
+                    Archive
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+        </>
+      )}
+    </li>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Sites</CardTitle>
+        <CardDescription>
+          One list for the whole study. Each site activity picks the sites where it runs. Archive a
+          site to stop using it; past years keep it.
+          {!isAdmin && " Only study admins can change the list."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {wp.isError && (
+          <p className="text-sm text-destructive">Could not load sites: {wp.error.message}</p>
+        )}
+        {!active.length && wp.isSuccess && (
+          <p className="text-sm text-muted-foreground">No sites yet.</p>
+        )}
+        {active.length > 0 && (
+          <ul className="divide-y rounded-md border text-sm">{active.map(row)}</ul>
+        )}
+        {isAdmin && (
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              add.mutate(name, {
+                onSuccess: () => {
+                  setName("");
+                  toast.success("Site added");
+                },
+              });
+            }}
+          >
+            <Input
+              aria-label="New site"
+              placeholder="Site name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <Button type="submit" loading={add.isPending} disabled={!name.trim()}>
+              <Plus className="h-4 w-4" />
+              Add
+            </Button>
+          </form>
+        )}
+        {archived.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Archived
+            </p>
+            <ul className="divide-y rounded-md border text-sm">{archived.map(row)}</ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ImportPanel() {
-  const { components } = useBudgetData();
+  const { objectives, outcomes, activities, lines } = useBudgetData();
+  const { canEdit } = useYear();
   const imp = useImportLines();
-  const [blocks, setBlocks] = useState<
-    (ParsedBlock & { componentId: string; newName: string; group: string })[]
-  >([]);
+  const [activityId, setActivityId] = useState("");
+  const [blocks, setBlocks] = useState<(ParsedBlock & { group: string })[]>([]);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState("");
+  const options = useMemo(
+    () => activityOptions({ objectives, outcomes, activities }),
+    [objectives, outcomes, activities],
+  );
+  const qtyUnits = useMemo(
+    () =>
+      unitSuggestions(
+        QUANTITY_UNITS,
+        lines.map((l) => l.quantityUnit),
+      ),
+    [lines],
+  );
+  const durUnits = useMemo(
+    () =>
+      unitSuggestions(
+        DURATION_UNITS,
+        lines.map((l) => l.durationUnit),
+      ),
+    [lines],
+  );
 
   async function onFile(file?: File) {
     if (!file) return;
@@ -208,9 +563,7 @@ function ImportPanel() {
       }
       setFileName(file.name);
       setRows(parsed.rows);
-      setBlocks(
-        parsed.blocks.map((b) => ({ ...b, componentId: NEW, newName: b.heading, group: "" })),
-      );
+      setBlocks(parsed.blocks.map((b) => ({ ...b, group: b.heading })));
     } catch {
       toast.error("Couldn't read that file. Upload an .xlsx workbook.");
     }
@@ -223,30 +576,27 @@ function ImportPanel() {
     const payload = rows.map((r) => {
       const b = blocks.find((x) => x.index === r.block)!;
       return {
-        component:
-          b.componentId === NEW
-            ? { name: b.newName.trim() || "Imported" }
-            : { id: b.componentId, name: "" },
-        line: {
-          description: r.description,
-          groupLabel: b.group.trim() || undefined,
-          quantity: r.quantity,
-          quantityUnit: r.quantityUnit,
-          unitCostCents: kesToCents(r.unitCost),
-          duration: r.duration,
-          durationUnit: r.durationUnit,
-          occurrences: r.occurrences,
-        },
+        description: r.description,
+        groupLabel: b.group.trim() || undefined,
+        quantity: r.quantity,
+        quantityUnit: r.quantityUnit,
+        unitCostCents: kesToCents(r.unitCost),
+        duration: r.duration,
+        durationUnit: r.durationUnit,
+        occurrences: r.occurrences,
       };
     });
-    imp.mutate(payload, {
-      onSuccess: (n) => {
-        toast.success(`Imported ${n} line(s)`);
-        setRows([]);
-        setBlocks([]);
-        setFileName("");
+    imp.mutate(
+      { activityId, rows: payload },
+      {
+        onSuccess: (n) => {
+          toast.success(`Imported ${n} line(s)`);
+          setRows([]);
+          setBlocks([]);
+          setFileName("");
+        },
       },
-    });
+    );
   }
   const numCell = (
     i: number,
@@ -268,64 +618,54 @@ function ImportPanel() {
       <CardHeader>
         <CardTitle className="text-base">Import from Excel</CardTitle>
         <CardDescription>
-          Upload an .xlsx budget. Rows without numbers become block headings; you choose which
-          component each block goes into.
+          Upload an .xlsx budget and choose the one activity every row is added to. Rows without
+          numbers become group labels you can edit. Not sure of the layout? Start from the template.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Label className="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
-          <Upload className="h-4 w-4" />
-          {fileName || "Choose .xlsx file"}
-          <input
-            type="file"
-            accept=".xlsx"
-            className="hidden"
-            onChange={(e) => onFile(e.target.files?.[0])}
+        {!canEdit && (
+          <p className="text-sm text-muted-foreground">
+            Import is off because there is no open year to import into.
+          </p>
+        )}
+        <div className="max-w-md space-y-1">
+          <Label>Add the lines to this activity</Label>
+          <ActivityPicker
+            value={activityId}
+            onChange={setActivityId}
+            options={options}
+            disabled={!canEdit}
+            label="Import into activity"
           />
-        </Label>
+          {!options.length && canEdit && (
+            <p className="text-xs text-muted-foreground">
+              This year has no activities. Add one under Activities first.
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Label
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${canEdit ? "cursor-pointer hover:bg-muted" : "pointer-events-none opacity-50"}`}
+          >
+            <Upload className="h-4 w-4" />
+            {fileName || "Choose .xlsx file"}
+            <input
+              type="file"
+              accept=".xlsx"
+              disabled={!canEdit}
+              className="hidden"
+              onChange={(e) => onFile(e.target.files?.[0])}
+            />
+          </Label>
+          <Button variant="ghost" size="sm" onClick={downloadImportTemplate}>
+            <Download className="h-4 w-4" />
+            Download template
+          </Button>
+        </div>
         {blocks.map((b) => (
           <div key={b.index} className="rounded-md border">
             <div className="flex flex-wrap items-end gap-3 border-b bg-muted/50 p-3">
               <p className="mr-auto font-medium">{b.heading}</p>
-              <div className="space-y-1">
-                <Label className="text-xs">Component</Label>
-                <Select
-                  value={b.componentId}
-                  onValueChange={(v) =>
-                    setBlocks((all) =>
-                      all.map((x) => (x.index === b.index ? { ...x, componentId: v } : x)),
-                    )
-                  }
-                >
-                  <SelectTrigger className="h-8 w-56">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NEW}>New component…</SelectItem>
-                    {components.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.code}. {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {b.componentId === NEW && (
-                <div className="space-y-1">
-                  <Label className="text-xs">New component name</Label>
-                  <Input
-                    className="h-8 w-56"
-                    value={b.newName}
-                    onChange={(e) =>
-                      setBlocks((all) =>
-                        all.map((x) =>
-                          x.index === b.index ? { ...x, newName: e.target.value } : x,
-                        ),
-                      )
-                    }
-                  />
-                </div>
-              )}
               <div className="space-y-1">
                 <Label className="text-xs">Group (optional)</Label>
                 <Input
@@ -367,19 +707,23 @@ function ImportPanel() {
                         </td>
                         <td>{numCell(i, "quantity", r.quantity)}</td>
                         <td>
-                          <MiniSelect
+                          <UnitInput
+                            aria-label="Unit"
+                            className="h-8 min-w-28"
                             value={r.quantityUnit}
-                            opts={QUANTITY_UNITS}
-                            onChange={(v) => setRow(i, { quantityUnit: v as QuantityUnit })}
+                            suggestions={qtyUnits}
+                            onChange={(v) => setRow(i, { quantityUnit: v })}
                           />
                         </td>
                         <td>{numCell(i, "unitCost", r.unitCost)}</td>
                         <td>{numCell(i, "duration", r.duration)}</td>
                         <td>
-                          <MiniSelect
+                          <UnitInput
+                            aria-label="Duration unit"
+                            className="h-8 min-w-28"
                             value={r.durationUnit}
-                            opts={DURATION_UNITS}
-                            onChange={(v) => setRow(i, { durationUnit: v as DurationUnit })}
+                            suggestions={durUnits}
+                            onChange={(v) => setRow(i, { durationUnit: v })}
                           />
                         </td>
                         <td>{numCell(i, "occurrences", r.occurrences)}</td>
@@ -402,37 +746,12 @@ function ImportPanel() {
           </div>
         ))}
         {rows.length > 0 && (
-          <Button onClick={confirm} disabled={imp.isPending}>
+          <Button onClick={confirm} loading={imp.isPending} disabled={!canEdit || !activityId}>
             Import {rows.length} line(s)
           </Button>
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function MiniSelect({
-  value,
-  opts,
-  onChange,
-}: {
-  value: string;
-  opts: readonly string[];
-  onChange: (v: string) => void;
-}) {
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-24">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {opts.map((o) => (
-          <SelectItem key={o} value={o}>
-            {o}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -443,16 +762,14 @@ function ExportPanel() {
       <CardHeader>
         <CardTitle className="text-base">Export to Excel</CardTitle>
         <CardDescription>
-          One sheet per component, a summary sheet with carryover per line and component, and an
-          events sheet.
+          A budget sheet and a summary sheet grouped by objective, outcome and activity, with
+          carryover per line, and an events sheet.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Button
           disabled={!d.period}
-          onClick={() =>
-            d.period && exportWorkbook(d.period, d.components, d.lines, d.events, d.attachments)
-          }
+          onClick={() => d.period && exportWorkbook(d.period, d, d.attachments)}
         >
           <Download className="h-4 w-4" />
           Download .xlsx
@@ -463,7 +780,7 @@ function ExportPanel() {
 }
 
 function PeriodGlance() {
-  const { period, components, lines, events } = useBudgetData();
+  const { period, activities, lines, events } = useBudgetData();
   const { data: audit = [] } = useAudit();
   const total = useMemo(() => periodSummary(lines, events), [lines, events]);
   const lastChange = useMemo(
@@ -480,7 +797,7 @@ function PeriodGlance() {
   const span = Math.max(daysBetween(period.startDate, period.endDate), 1);
   const elapsed = clamp(daysBetween(period.startDate, today), 0, span);
   const counts: [string, number][] = [
-    ["Components", components.length],
+    ["Activities", activities.length],
     ["Lines", lines.length],
     ["Events", events.length],
   ];
@@ -488,7 +805,7 @@ function PeriodGlance() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Period at a glance</CardTitle>
+        <CardTitle className="text-base">Year at a glance</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="space-y-2">
@@ -534,6 +851,14 @@ function AuditLog() {
       (!from || a.changedAt.slice(0, 10) >= from) &&
       (!to || a.changedAt.slice(0, 10) <= to),
   );
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState<number>(AUDIT_PAGE_SIZES[1]);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  // Filters can shrink the list below the current page.
+  const current = Math.min(page, pages - 1);
+  const start = current * size;
+  const shown = rows.slice(start, start + size);
+  useEffect(() => setPage(0), [entity, from, to]);
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-end gap-3 space-y-0">
@@ -582,7 +907,7 @@ function AuditLog() {
             </tr>
           </thead>
           <tbody>
-            {rows.slice(0, 500).map((a) => (
+            {shown.map((a) => (
               <tr key={a.id} className="border-t [&>td]:px-3 [&>td]:py-1.5">
                 <td className="whitespace-nowrap tabular-nums">
                   {new Date(a.changedAt).toLocaleString()}
@@ -607,7 +932,84 @@ function AuditLog() {
             )}
           </tbody>
         </table>
+        {rows.length > AUDIT_PAGE_SIZES[0] && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>Rows per page</span>
+              <Select
+                value={String(size)}
+                onValueChange={(v) => {
+                  const n = Number(v);
+                  // Keep the first visible row on screen.
+                  setPage(Math.floor(start / n));
+                  setSize(n);
+                }}
+              >
+                <SelectTrigger className="h-8 w-20" aria-label="Rows per page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AUDIT_PAGE_SIZES.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="tabular-nums">
+                {start + 1}–{start + shown.length} of {rows.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="First page"
+                disabled={current === 0}
+                onClick={() => setPage(0)}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Previous page"
+                disabled={current === 0}
+                onClick={() => setPage(current - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 tabular-nums text-muted-foreground">
+                Page {current + 1} of {pages}
+              </span>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Next page"
+                disabled={current >= pages - 1}
+                onClick={() => setPage(current + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Last page"
+                disabled={current >= pages - 1}
+                onClick={() => setPage(pages - 1)}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+
+const AUDIT_PAGE_SIZES = [25, 50, 100, 200] as const;

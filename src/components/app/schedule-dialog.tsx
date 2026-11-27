@@ -91,7 +91,6 @@ export function ScheduleDialog({
           toast.success(n ? `${n} event date(s) updated` : "No dates changed");
           onClose();
         },
-        onError: (err) => toast.error(err.message),
       },
     );
   };
@@ -198,7 +197,11 @@ export function ScheduleDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={schedule.isPending || (mode === "repeat" && !first)}>
+          <Button
+            onClick={save}
+            loading={schedule.isPending}
+            disabled={mode === "repeat" && !first}
+          >
             Save dates
           </Button>
         </DialogFooter>

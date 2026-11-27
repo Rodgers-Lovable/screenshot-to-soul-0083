@@ -67,6 +67,7 @@
   --color-warning-soft: var(--warning-soft);
   --color-warning-foreground: var(--warning-foreground);
   --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --color-sidebar: var(--sidebar);
@@ -101,6 +102,7 @@
   --warning-soft: oklch(0.96 0.05 80);
   --warning-foreground: oklch(0.42 0.1 60);
   --danger-soft: oklch(0.95 0.035 25);
+  --success: oklch(0.52 0.13 150);
   --border: oklch(0.91 0.005 220);
   --input: oklch(0.88 0.006 220);
   --ring: oklch(0.55 0.09 195);

@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { StudyGate } from "@/components/app/study-gate";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/app/password-input";
@@ -11,7 +12,7 @@ import { logger } from "@/lib/log";
 
 const log = logger("auth");
 
-/** Shows the sign-in screen until a team member is signed in. */
+/** Shows the sign-in screen until someone is signed in, then the study gate. */
 export function AuthGate({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -31,39 +32,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     });
     return () => data.subscription.unsubscribe();
   }, [qc]);
-  const [member, setMember] = useState<boolean | undefined>(undefined);
-  const uid = session?.user.id;
-  useEffect(() => {
-    if (!uid) return setMember(undefined);
-    supabase.rpc("join_team_if_empty").then(({ data, error }) => {
-      if (error)
-        log.error("team check failed (is the schema pushed?)", error, { code: error.code });
-      else
-        log.info(data ? "team member, opening app" : "signed in but not on the team yet", {
-          userId: uid,
-        });
-      setMember(!!data);
-    });
-  }, [uid]);
-  if (session === undefined || (session && member === undefined))
+  if (session === undefined)
     return <div className="p-8 text-sm text-muted-foreground">Loading budget…</div>;
   if (!session) return <SignIn />;
-  if (!member)
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="w-full max-w-sm space-y-3 rounded-lg border bg-card p-6">
-          <h1 className="text-xl font-semibold">Waiting for access</h1>
-          <p className="text-sm text-muted-foreground">
-            You're signed in as {session.user.email}. Ask a team member to add you under Settings →
-            Team.
-          </p>
-          <Button variant="outline" onClick={() => supabase.auth.signOut()}>
-            Sign out
-          </Button>
-        </div>
-      </div>
-    );
-  return <>{children}</>;
+  return <StudyGate>{children}</StudyGate>;
 }
 
 function SignIn() {
@@ -112,7 +84,7 @@ function SignIn() {
           <h1 className="mt-1 text-xl font-semibold">
             {mode === "in" ? "Sign in" : "Create an account"}
           </h1>
-          <p className="text-sm text-muted-foreground">Team members share one budget.</p>
+          <p className="text-sm text-muted-foreground">Each study keeps its own budget and team.</p>
         </div>
         {sent ? (
           <p className="text-sm">
