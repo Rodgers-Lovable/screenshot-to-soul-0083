@@ -5,6 +5,10 @@ import {
   AlertTriangle,
   Archive,
   ArchiveRestore,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Download,
   Lock,
   LockOpen,
@@ -840,6 +844,14 @@ function AuditLog() {
       (!from || a.changedAt.slice(0, 10) >= from) &&
       (!to || a.changedAt.slice(0, 10) <= to),
   );
+  const [page, setPage] = useState(0);
+  const [size, setSize] = useState<number>(AUDIT_PAGE_SIZES[1]);
+  const pages = Math.max(1, Math.ceil(rows.length / size));
+  // Filters can shrink the list below the current page.
+  const current = Math.min(page, pages - 1);
+  const start = current * size;
+  const shown = rows.slice(start, start + size);
+  useEffect(() => setPage(0), [entity, from, to]);
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-end gap-3 space-y-0">
@@ -888,7 +900,7 @@ function AuditLog() {
             </tr>
           </thead>
           <tbody>
-            {rows.slice(0, 500).map((a) => (
+            {shown.map((a) => (
               <tr key={a.id} className="border-t [&>td]:px-3 [&>td]:py-1.5">
                 <td className="whitespace-nowrap tabular-nums">
                   {new Date(a.changedAt).toLocaleString()}
@@ -913,7 +925,84 @@ function AuditLog() {
             )}
           </tbody>
         </table>
+        {rows.length > AUDIT_PAGE_SIZES[0] && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>Rows per page</span>
+              <Select
+                value={String(size)}
+                onValueChange={(v) => {
+                  const n = Number(v);
+                  // Keep the first visible row on screen.
+                  setPage(Math.floor(start / n));
+                  setSize(n);
+                }}
+              >
+                <SelectTrigger className="h-8 w-20" aria-label="Rows per page">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AUDIT_PAGE_SIZES.map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="tabular-nums">
+                {start + 1}–{start + shown.length} of {rows.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="First page"
+                disabled={current === 0}
+                onClick={() => setPage(0)}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Previous page"
+                disabled={current === 0}
+                onClick={() => setPage(current - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="px-2 tabular-nums text-muted-foreground">
+                Page {current + 1} of {pages}
+              </span>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Next page"
+                disabled={current >= pages - 1}
+                onClick={() => setPage(current + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="size-8"
+                aria-label="Last page"
+                disabled={current >= pages - 1}
+                onClick={() => setPage(pages - 1)}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
+
+const AUDIT_PAGE_SIZES = [25, 50, 100, 200] as const;
