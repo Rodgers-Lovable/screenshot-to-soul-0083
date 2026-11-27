@@ -316,7 +316,7 @@ function ActivityBlock({
             <tbody>
               {groups.map((g) => {
                 const gl = lines.filter((l) => (l.groupLabel ?? "") === g);
-                const gs = sumSummaries(gl.map((l) => sums.get(l.id)!));
+                const gs = sumSummaries(gl.flatMap((l) => sums.get(l.id) ?? []));
                 return [
                   g && (
                     <tr key={`g-${g}`} className="bg-secondary/60">
@@ -338,16 +338,21 @@ function ActivityBlock({
                       <td colSpan={3} />
                     </tr>
                   ),
-                  ...gl.map((l) => (
-                    <LineRow
-                      key={l.id}
-                      line={l}
-                      s={sums.get(l.id)!}
-                      onEdit={() => onEdit(l)}
-                      onMove={() => onMove(l)}
-                      onDelete={() => onDelete(l)}
-                    />
-                  )),
+                  ...gl
+                    .flatMap((l) => {
+                      const s = sums.get(l.id);
+                      return s ? [{ l, s }] : [];
+                    })
+                    .map(({ l, s }) => (
+                      <LineRow
+                        key={l.id}
+                        line={l}
+                        s={s}
+                        onEdit={() => onEdit(l)}
+                        onMove={() => onMove(l)}
+                        onDelete={() => onDelete(l)}
+                      />
+                    )),
                 ];
               })}
             </tbody>

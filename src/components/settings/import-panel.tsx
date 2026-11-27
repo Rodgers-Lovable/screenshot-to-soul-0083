@@ -71,10 +71,10 @@ export function ImportPanel() {
 
   function confirm() {
     const payload = rows.map((r) => {
-      const b = blocks.find((x) => x.index === r.block)!;
+      const group = blocks.find((x) => x.index === r.block)?.group.trim();
       return {
         description: r.description,
-        groupLabel: b.group.trim() || undefined,
+        groupLabel: group || undefined,
         quantity: r.quantity,
         quantityUnit: r.quantityUnit,
         unitCostCents: kesToCents(r.unitCost),

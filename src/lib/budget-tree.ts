@@ -75,7 +75,7 @@ export function buildBudgetTree(
               activity,
               lines: own,
               funded: own.length > 0,
-              summary: sumSummaries(own.map((l) => sums.get(l.id)!)),
+              summary: sumSummaries(own.flatMap((l) => sums.get(l.id) ?? [])),
             };
           });
         return { outcome, activities: acts, summary: sumSummaries(acts.map((a) => a.summary)) };
@@ -185,7 +185,7 @@ export function fundedDeleteMessage(
 ): string | null {
   if (!lineCount) return null;
   const what = kind === "activity" ? "this activity" : `activities under this ${kind}`;
-  return `${kind[0]!.toUpperCase()}${kind.slice(1)} cannot be deleted because ${what} ${
+  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} cannot be deleted because ${what} ${
     kind === "activity" ? "has" : "have"
   } ${plural(lineCount, "budget line")}. Move the lines to another activity, or delete them, first.`;
 }

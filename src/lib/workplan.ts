@@ -25,9 +25,11 @@ export function pickDefaultYear<T extends Span & { status: string }>(
     .filter((y) => y.status === "open" && dated(y) && y.startDate <= today && today <= y.endDate)
     .sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
   if (current) return current;
-  return [...years].sort(
-    (a, b) => b.startDate.localeCompare(a.startDate) || b.id.localeCompare(a.id),
-  )[0]!;
+  return (
+    [...years].sort(
+      (a, b) => b.startDate.localeCompare(a.startDate) || b.id.localeCompare(a.id),
+    )[0] ?? null
+  );
 }
 
 /** The first other year whose dates overlap the given range (inclusive). */
@@ -168,7 +170,11 @@ export function moveWithin<T extends Ordered>(
   const i = list.findIndex((x) => x.id === id);
   const j = dir === "up" ? i - 1 : i + 1;
   if (i < 0 || j < 0 || j >= list.length) return [];
-  [list[i], list[j]] = [list[j]!, list[i]!];
+  const a = list[i];
+  const b = list[j];
+  if (!a || !b) return [];
+  list[i] = b;
+  list[j] = a;
   const before = new Map(siblings.map((s) => [s.id, s.sortOrder]));
   return list
     .map((x, n) => ({ id: x.id, sortOrder: n + 1 }))
@@ -179,7 +185,7 @@ export function moveWithin<T extends Ordered>(
 export function frequencyText(label: string, every?: number, unit?: RepeatUnit): string {
   const rule = every && unit ? `every ${every} ${every === 1 ? unit.replace(/s$/, "") : unit}` : "";
   if (label && rule) return `${label} (${rule})`;
-  return label || (rule ? rule[0]!.toUpperCase() + rule.slice(1) : "");
+  return label || (rule ? rule.charAt(0).toUpperCase() + rule.slice(1) : "");
 }
 
 /** A short label for a year's dates, such as "2027" or "2026/2027". */

@@ -325,7 +325,8 @@ function SpendingPage() {
               {groups.map((g) => {
                 const multi = g.lineEvents.length > 1;
                 const isOpen = multi && expanded.has(g.line.id);
-                const single = g.rows[0]!;
+                const single = g.rows[0];
+                if (!single) return [];
                 const activate = () => (multi ? toggle(g.line.id) : open(single.event.id));
                 const pct = g.progress.total
                   ? ((g.progress.done + g.progress.cancelled) / g.progress.total) * 100

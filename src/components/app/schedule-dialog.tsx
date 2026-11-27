@@ -65,10 +65,10 @@ export function ScheduleDialog({
     setCustom(Object.fromEntries(sorted.map((e) => [e.sequence, e.plannedDate ?? ""])));
   }, [line?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const generated = useMemo(
-    () => (first ? scheduleDates(first, sorted.length, REPEATS[repeat]!.r) : []),
-    [first, repeat, sorted.length],
-  );
+  const generated = useMemo(() => {
+    const rule = REPEATS[repeat]?.r;
+    return first && rule ? scheduleDates(first, sorted.length, rule) : [];
+  }, [first, repeat, sorted.length]);
   const proposed = (e: BudgetEvent, i: number) =>
     e.status !== "planned" ? e.plannedDate : mode === "repeat" ? generated[i] : custom[e.sequence];
   const outside = period
