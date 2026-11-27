@@ -59,7 +59,8 @@ export function MoveLineDialog({
             Cancel
           </Button>
           <Button
-            disabled={!line || !target || !!problem || update.isPending}
+            loading={update.isPending}
+            disabled={!line || !target || !!problem}
             onClick={() =>
               line &&
               update.mutate(

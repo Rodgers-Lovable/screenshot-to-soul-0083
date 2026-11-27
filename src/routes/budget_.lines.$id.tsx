@@ -1,15 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarClock, ChevronRight, Info, MoveRight, Pencil } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  ChevronRight,
+  Info,
+  Loader2,
+  MoveRight,
+  Pencil,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBudgetData, useUpdateLine } from "@/data/hooks";
 import { actualInputs, eventFigures, eventFlags, lineFlags, lineSummary } from "@/lib/calc";
 import { formulaShort, kesToCents, pct, todayISO } from "@/lib/format";
-import { Money, useFmt } from "@/components/app/currency";
+import { Money, useFmt, Variance } from "@/components/app/currency";
 import { Flags, StatusChip } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
 import { MoveLineDialog } from "@/components/app/move-line-dialog";
@@ -40,6 +49,8 @@ function LineDetail() {
   const { id } = Route.useParams();
   const d = useBudgetData();
   const f = useFmt();
+  const dir = (c: number) =>
+    c ? `${f.primary(Math.abs(c))} ${c > 0 ? "under" : "over"}` : "on plan";
   const { open } = useRecord();
   const { canEdit } = useYear();
   const [edit, setEdit] = useState(false);
@@ -152,9 +163,9 @@ function LineDetail() {
 
       <Card className="grid grid-cols-2 gap-x-6 gap-y-3 p-4 md:grid-cols-4">
         <Minor label="Variance on completed">
-          <Money cents={s.varianceOnCompleted} signed tone="auto" className="items-start!" />
+          <Variance cents={s.varianceOnCompleted} className="items-start!" />
           <p className="text-xs text-muted-foreground tabular-nums">
-            Volume {f.primary(s.volumeVariance)} · Rate {f.primary(s.rateVariance)}
+            Volume {dir(s.volumeVariance)} · Rate {dir(s.rateVariance)}
           </p>
         </Minor>
         <Minor label="Still to spend">
@@ -216,9 +227,7 @@ function LineDetail() {
                     <td className="num">{done ? f.kes(a.r1) : ""}</td>
                     <td className="num">{done ? a.d1 : ""}</td>
                     <td className="text-right">{done && <Money cents={fig.actual} />}</td>
-                    <td className="text-right">
-                      {done && <Money cents={fig.variance} signed tone="auto" />}
-                    </td>
+                    <td className="text-right">{done && <Variance cents={fig.variance} />}</td>
                     <td className="num">{n}</td>
                     <td>
                       <Button size="sm" variant="outline" onClick={() => open(e.id)}>
@@ -304,31 +313,46 @@ function FinanceCard({
       <CardContent className="grid gap-4 sm:grid-cols-4 sm:items-end">
         <div className="space-y-1">
           <Label htmlFor="fin">Finance-posted amount (KES)</Label>
-          <Input
-            id="fin"
-            disabled={!canEdit}
-            type="number"
-            step="any"
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            onBlur={() => {
-              const c = val === "" ? undefined : kesToCents(Number(val));
-              if (c !== posted)
-                upd.mutate(
-                  { id: lineId, patch: { financePostedCents: c } },
-                  { onSuccess: () => toast.success("Finance figure saved") },
-                );
-            }}
-          />
+          <div className="relative">
+            <Input
+              id="fin"
+              disabled={!canEdit || upd.isPending}
+              aria-busy={upd.isPending}
+              className={cn(upd.isPending && "pr-9")}
+              type="number"
+              step="any"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              onBlur={() => {
+                const c = val === "" ? undefined : kesToCents(Number(val));
+                if (c !== posted)
+                  upd.mutate(
+                    { id: lineId, patch: { financePostedCents: c } },
+                    { onSuccess: () => toast.success("Finance figure saved") },
+                  );
+              }}
+            />
+            {upd.isPending && (
+              <Loader2
+                className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+                aria-hidden
+              />
+            )}
+          </div>
+          {upd.isPending && (
+            <p className="text-xs text-muted-foreground" role="status">
+              Saving…
+            </p>
+          )}
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Reported actual</p>
-          <Money cents={reported} className="!items-start" />
+          <Money cents={reported} className="items-start!" />
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Difference (finance − reported)</p>
           {posted !== undefined ? (
-            <Money cents={p - reported} signed className="!items-start" />
+            <Money cents={p - reported} signed className="items-start!" />
           ) : (
             <span className="text-sm text-muted-foreground">—</span>
           )}

@@ -207,11 +207,13 @@ function ShellInner({ children }: { children: ReactNode }) {
                     setRecordId(e.id);
                   }}
                 >
-                  <span className="flex-1 truncate">{e.title}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="min-w-0 flex-1 wrap-break-word">{e.title}</span>
+                  <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                     {e.plannedDate ?? "no date"}
                   </span>
-                  <StatusChip status={e.status} />
+                  <span className="shrink-0">
+                    <StatusChip status={e.status} />
+                  </span>
                 </CommandItem>
               ))}
           </CommandGroup>

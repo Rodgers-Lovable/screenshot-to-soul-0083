@@ -8,6 +8,7 @@ type Call = {
   rows?: Record<string, unknown>[];
   eq?: unknown[];
   in?: unknown[];
+  onConflict?: string;
 };
 const calls: Call[] = [];
 let tableRows: Record<string, Record<string, unknown>[]> = {};
@@ -15,8 +16,8 @@ let rpcImpl: (fn: string, a?: unknown) => unknown = () => ({ data: null, error: 
 
 vi.mock("@/integrations/supabase/client", () => {
   const from = (table: string) => ({
-    upsert: (rows: Record<string, unknown>[]) => {
-      calls.push({ table, op: "upsert", rows });
+    upsert: (rows: Record<string, unknown>[], opts?: { onConflict?: string }) => {
+      calls.push({ table, op: "upsert", rows, onConflict: opts?.onConflict });
       return Promise.resolve({ error: null });
     },
     insert: (rows: Record<string, unknown>[]) => {
@@ -104,7 +105,12 @@ const empty = (): StoreData => ({
   objectives: [],
   outcomes: [],
   activities: [],
+  sites: [],
+  activitySites: [],
+  indicators: [],
   lines: [],
+  deliveries: [],
+  results: [],
   events: [],
   attachments: [],
   audit: [],
@@ -249,6 +255,37 @@ describe("loadRemote", () => {
     expect(sel("attachments")?.in).toEqual(["event_id", ["e2"]]);
   });
 
+  it("reads deliveries through the activities, and their results and proof through them", async () => {
+    tableRows = {
+      budget_periods: [{ id: "p2" }],
+      objectives: [{ id: "o2", period_id: "p2" }],
+      outcomes: [{ id: "oc2", objective_id: "o2" }],
+      activities: [{ id: "a2", outcome_id: "oc2" }],
+      deliveries: [
+        { id: "d1", activity_id: "a2", site_id: "s1", round_number: 2, round_label: "" },
+      ],
+      delivery_indicator_results: [{ delivery_id: "d1", indicator_id: "i1", value: 4, notes: "" }],
+      budget_lines: [{ id: "l2", activity_id: "a2" }],
+      budget_events: [{ id: "e2", line_id: "l2", delivery_id: "d1" }],
+      attachments: [{ id: "at1", delivery_id: "d1", file_name: "p.pdf" }],
+    };
+    const d = await loadRemote("study-1", "p2");
+    const sel = (t: string) => calls.filter((c) => c.table === t && c.op === "select");
+    expect(sel("deliveries")[0]?.in).toEqual(["activity_id", ["a2"]]);
+    expect(sel("delivery_indicator_results")[0]?.in).toEqual(["delivery_id", ["d1"]]);
+    expect(sel("attachments").map((c) => c.in?.[0])).toEqual(["event_id", "delivery_id"]);
+    expect(d.deliveries[0]).toMatchObject({ siteId: "s1", roundNumber: 2 });
+    expect(d.results).toEqual([{ deliveryId: "d1", indicatorId: "i1", value: 4, notes: "" }]);
+    expect(d.events[0]?.deliveryId).toBe("d1");
+    expect(d.attachments.map((a) => a.deliveryId)).toContain("d1");
+  });
+
+  it("does not read deliveries when a year has no activities", async () => {
+    tableRows = { budget_periods: [{ id: "p4" }] };
+    await loadRemote("study-1", "p4");
+    expect(calls.some((c) => c.table === "deliveries")).toBe(false);
+  });
+
   it("returns an empty budget when the year is not in the study", async () => {
     tableRows = { objectives: [{ id: "o", period_id: "x" }] };
     const d = await loadRemote("study-1", "x");
@@ -261,6 +298,112 @@ describe("loadRemote", () => {
     tableRows = { budget_periods: [{ id: "p3" }] };
     await loadRemote("study-1", "p3");
     expect(calls.some((c) => c.table === "budget_lines")).toBe(false);
+  });
+});
+
+describe("syncRemote deliveries", () => {
+  const delivery = (id: string): StoreData["deliveries"][number] => ({
+    id,
+    activityId: "a",
+    siteId: "s",
+    roundNumber: 1,
+    roundLabel: "",
+    status: "planned",
+    notes: "",
+  });
+  const event = (id: string, deliveryId?: string): StoreData["events"][number] => ({
+    id,
+    lineId: "l",
+    sequence: 1,
+    title: "t",
+    status: "planned",
+    deliveryId,
+  });
+  it("writes a new delivery before the spending and proof that point at it", async () => {
+    const after = empty();
+    after.deliveries = [delivery("d")];
+    after.results = [{ deliveryId: "d", indicatorId: "i", value: 3, notes: "" }];
+    after.events = [event("e", "d")];
+    after.attachments = [
+      {
+        id: "at",
+        deliveryId: "d",
+        fileName: "p",
+        fileUrl: "storage:x",
+        mimeType: "",
+        sizeBytes: 1,
+        uploadedAt: "t",
+      },
+    ];
+    await syncRemote(empty(), after, "study-1");
+    expect(calls.map((c) => `${c.table}:${c.op}`)).toEqual([
+      "deliveries:upsert",
+      "delivery_indicator_results:upsert",
+      "budget_events:upsert",
+      "attachments:upsert",
+    ]);
+    expect(calls[1]?.onConflict).toBe("delivery_id,indicator_id");
+    expect(calls[1]?.rows?.[0]).toMatchObject({
+      study_id: "study-1",
+      delivery_id: "d",
+      indicator_id: "i",
+      value: 3,
+    });
+    expect(calls[3]?.rows?.[0]).toMatchObject({ delivery_id: "d", event_id: null });
+  });
+
+  it("unlinks spending before it deletes the delivery, and deletes proof and results first", async () => {
+    const before = empty();
+    before.deliveries = [delivery("d")];
+    before.results = [{ deliveryId: "d", indicatorId: "i", value: 3, notes: "" }];
+    before.events = [event("e", "d")];
+    before.attachments = [
+      {
+        id: "at",
+        deliveryId: "d",
+        fileName: "p",
+        fileUrl: "storage:x",
+        mimeType: "",
+        sizeBytes: 1,
+        uploadedAt: "t",
+      },
+    ];
+    const after = JSON.parse(JSON.stringify(before)) as StoreData;
+    after.deliveries = [];
+    after.results = [];
+    after.attachments = [];
+    delete after.events[0]?.deliveryId;
+    await syncRemote(before, after, "study-1");
+    expect(calls.map((c) => `${c.table}:${c.op}`)).toEqual([
+      "budget_events:upsert",
+      "delivery_indicator_results:delete",
+      "attachments:delete",
+      "deliveries:delete",
+    ]);
+    expect(calls[0]?.rows?.[0]).toMatchObject({ id: "e", delivery_id: null });
+    expect(calls[1]?.eq).toEqual([
+      ["study_id", "study-1"],
+      ["delivery_id", "d"],
+      ["indicator_id", "i"],
+    ]);
+  });
+
+  it("skips unchanged deliveries and results", async () => {
+    const same = empty();
+    same.deliveries = [delivery("d")];
+    same.results = [{ deliveryId: "d", indicatorId: "i", value: 3, notes: "" }];
+    await syncRemote(same, JSON.parse(JSON.stringify(same)), "study-1");
+    expect(calls).toEqual([]);
+  });
+
+  it("updates a changed result value", async () => {
+    const before = empty();
+    before.results = [{ deliveryId: "d", indicatorId: "i", value: 3, notes: "" }];
+    const after = JSON.parse(JSON.stringify(before)) as StoreData;
+    after.results[0]!.value = 5;
+    await syncRemote(before, after, "study-1");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.rows?.[0]).toMatchObject({ value: 5 });
   });
 });
 

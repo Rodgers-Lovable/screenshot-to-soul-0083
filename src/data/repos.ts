@@ -9,6 +9,8 @@ import type {
   BudgetEvent,
   BudgetLine,
   BudgetPeriod,
+  Delivery,
+  DeliveryResult,
   Objective,
   Outcome,
   Site,
@@ -16,7 +18,22 @@ import type {
   StudyMember,
   WorkplanData,
 } from "@/lib/types";
-import { planOccurrenceChange } from "@/lib/calc";
+import { planOccurrenceChange, type Repeat } from "@/lib/calc";
+import {
+  deliveryDeleteBlock,
+  INDICATOR_DELETE_BLOCK,
+  isDuplicateRound,
+  KIND_CHANGE_BLOCK,
+  linkedLineMoveBlock,
+  nextRound,
+  parentDeleteBlock,
+  planRounds,
+  roundText,
+  siteRemovalBlock,
+  validateDelivery,
+  validateEventLink,
+  validateRounds,
+} from "@/lib/deliveries";
 import {
   cleanUnit,
   fundedDeleteMessage,
@@ -100,10 +117,53 @@ export interface EventRepo {
   /** Sets planned dates by sequence. Done and cancelled events are left alone. */
   schedule(lineId: string, dates: { sequence: number; plannedDate?: string }[]): Promise<number>;
 }
+/** A receipt goes on a spending record, proof of delivery on a delivery. */
+export type AttachmentTarget = { eventId: string } | { deliveryId: string };
 export interface AttachmentRepo {
   list(): Promise<Attachment[]>;
-  add(eventId: string, file: File, label?: string): Promise<Attachment>;
+  add(target: AttachmentTarget, file: File, label?: string): Promise<Attachment>;
   remove(id: string): Promise<void>;
+}
+export interface DeliveryData {
+  deliveries: Delivery[];
+  results: DeliveryResult[];
+}
+export interface GenerateInput {
+  rounds: number;
+  firstDate?: string;
+  repeat?: Repeat | null;
+}
+export interface GenerateResult {
+  created: number;
+  existing: number;
+  outsideYear: number;
+}
+export interface DeliveryInput {
+  roundNumber?: number;
+  roundLabel?: string;
+  siteId?: string;
+  plannedDate?: string;
+}
+export type DeliveryPatch = Partial<
+  Pick<Delivery, "status" | "plannedDate" | "actualDate" | "notes" | "roundLabel">
+>;
+export interface DeliveryRepo {
+  list(): Promise<DeliveryData>;
+  /** Adds the missing round and site combinations only. Safe to run again. */
+  generate(activityId: string, input: GenerateInput): Promise<GenerateResult>;
+  add(activityId: string, input: DeliveryInput): Promise<Delivery>;
+  update(id: string, patch: DeliveryPatch): Promise<Delivery>;
+  /** Blocked while spending is linked or proof files exist. */
+  remove(id: string): Promise<void>;
+  /** A null value clears the result. */
+  setResult(
+    deliveryId: string,
+    indicatorId: string,
+    value: number | null,
+    notes?: string,
+  ): Promise<void>;
+  linkEvents(deliveryId: string, eventIds: string[]): Promise<number>;
+  unlinkEvents(eventIds: string[]): Promise<number>;
 }
 export interface AuditRepo {
   list(): Promise<AuditEntry[]>;
@@ -292,10 +352,11 @@ function removeLineLocal(id: string) {
   const d = db();
   const line = d.lines.find((l) => l.id === id);
   const evIds = d.events.filter((e) => e.lineId === id).map((e) => e.id);
+  const onLine = (a: Attachment) => !!a.eventId && evIds.includes(a.eventId);
   d.attachments
-    .filter((a) => evIds.includes(a.eventId))
+    .filter(onLine)
     .forEach((a) => audit("attachment", a.id, "(deleted)", a.fileName, null));
-  d.attachments = d.attachments.filter((a) => !evIds.includes(a.eventId));
+  d.attachments = d.attachments.filter((a) => !onLine(a));
   evIds.forEach((e) => audit("event", e, "(deleted)", e, null));
   d.events = d.events.filter((e) => e.lineId !== id);
   d.lines = d.lines.filter((l) => l.id !== id);
@@ -359,6 +420,8 @@ export const lineRepo: LineRepo = {
       if (patch.activityId !== undefined && patch.activityId !== line.activityId) {
         const bad = validateLineMove(line, patch.activityId, d);
         if (bad) throw new Error(bad);
+        const linked = d.events.filter((e) => e.lineId === id && e.deliveryId).length;
+        if (linked) throw new Error(linkedLineMoveBlock(linked));
       }
       if (patch.occurrences !== undefined && patch.occurrences !== line.occurrences) {
         const evs = d.events.filter((e) => e.lineId === id);
@@ -389,6 +452,14 @@ export const eventRepo: EventRepo = {
     tx(() => {
       const e = db().events.find((x) => x.id === id);
       if (!e) throw new Error("Event not found");
+      if (patch.deliveryId) {
+        const bad = validateEventLink(
+          db().lines.find((l) => l.id === e.lineId),
+          db().deliveries.find((x) => x.id === patch.deliveryId),
+          {},
+        );
+        if (bad) throw new Error(bad);
+      }
       applyPatch("event", e, patch);
       return clone(e);
     }),
@@ -409,15 +480,20 @@ export const eventRepo: EventRepo = {
 
 export const attachmentRepo: AttachmentRepo = {
   list: async () => signUrls(await read((d) => d.attachments)),
-  add: async (eventId, file, label) => {
+  add: async (target, file, label) => {
     const scope = scopeNow();
     const year = scope.period && (await getYear(scope.study, scope.period));
     if (year && year.status === "closed") throw new Error(CLOSED);
-    const path = await uploadEvidence(scope.study, eventId, file);
+    const owner =
+      "deliveryId" in target ? { deliveryId: target.deliveryId } : { eventId: target.eventId };
+    const folder = "deliveryId" in target ? `deliveries/${target.deliveryId}` : target.eventId;
+    const path = await uploadEvidence(scope.study, folder, file);
     return tx(() => {
+      if ("deliveryId" in target && !db().deliveries.some((x) => x.id === target.deliveryId))
+        throw new Error("Round not found");
       const a: Attachment = {
         id: uid(),
-        eventId,
+        ...owner,
         fileName: file.name,
         fileUrl: path,
         mimeType: file.type,
@@ -485,11 +561,19 @@ function removeOutcomeLocal(id: string) {
   w.outcomes = w.outcomes.filter((x) => x.id !== id);
   audit("outcome", id, "(deleted)", o?.title, null);
 }
-/** Lines of the active year, read before a delete so funded items can be refused. */
-async function lineSnapshot(scope: Scope): Promise<BudgetLine[]> {
-  if (!scope.period) return [];
-  return (await loadRemote(scope.study, scope.period)).lines;
+/** Lines and deliveries of the active year, read before a change so protected items can be refused. */
+async function budgetSnapshot(scope: Scope) {
+  if (!scope.period)
+    return {
+      lines: [] as BudgetLine[],
+      deliveries: [] as Delivery[],
+      results: [] as DeliveryResult[],
+    };
+  const { lines, deliveries, results } = await loadRemote(scope.study, scope.period);
+  return { lines, deliveries, results };
 }
+const deliveriesUnder = (activityIds: Set<string>, all: Delivery[]) =>
+  all.filter((d) => activityIds.has(d.activityId)).length;
 const found = <T>(row: T | undefined, what: string): T => {
   if (!row) throw new Error(`${what} not found`);
   return row;
@@ -541,12 +625,17 @@ export const workplanRepo: WorkplanRepo = {
     }),
   removeObjective: async (id) => {
     const scope = scopeNow();
-    const lines = await lineSnapshot(scope);
+    const { lines, deliveries } = await budgetSnapshot(scope);
     return wtx(
       () => {
         const w = wdb();
         const outs = w.outcomes.filter((o) => o.objectiveId === id);
         const acts = w.activities.filter((a) => outs.some((o) => o.id === a.outcomeId));
+        const held = parentDeleteBlock(
+          "objective",
+          deliveriesUnder(new Set(acts.map((a) => a.id)), deliveries),
+        );
+        if (held) throw new Error(held);
         const bad = fundedDeleteMessage(
           "objective",
           linesUnder(
@@ -598,10 +687,15 @@ export const workplanRepo: WorkplanRepo = {
     }),
   removeOutcome: async (id) => {
     const scope = scopeNow();
-    const lines = await lineSnapshot(scope);
+    const { lines, deliveries } = await budgetSnapshot(scope);
     return wtx(
       () => {
         const acts = wdb().activities.filter((a) => a.outcomeId === id);
+        const held = parentDeleteBlock(
+          "outcome",
+          deliveriesUnder(new Set(acts.map((a) => a.id)), deliveries),
+        );
+        if (held) throw new Error(held);
         const bad = fundedDeleteMessage(
           "outcome",
           linesUnder(
@@ -658,40 +752,58 @@ export const workplanRepo: WorkplanRepo = {
       auditCreate("activity", a);
       return clone(a);
     }),
-  updateActivity: (id, patch) =>
-    wtx(() => {
-      const w = wdb();
-      const a = activityOf(id);
-      const next: Partial<ActivityInput> = { ...patch };
-      for (const k of [
-        "code",
-        "output",
-        "meansOfVerification",
-        "frequencyLabel",
-        "notes",
-      ] as const) {
-        const v = next[k];
-        if (v !== undefined) next[k] = v.trim();
-      }
-      if (next.title !== undefined) next.title = need(next.title, "activity");
-      const every = "repeatEvery" in next ? next.repeatEvery : a.repeatEvery;
-      const unit = "repeatUnit" in next ? next.repeatUnit : a.repeatUnit;
-      const bad = validateRepeat(every, unit);
-      if (bad) throw new Error(bad);
-      if (next.kind === "general" && a.kind === "site") {
-        w.activitySites
-          .filter((s) => s.activityId === id)
-          .forEach((s) => audit("activity site", `${id}:${s.siteId}`, "(deleted)", s.siteId, null));
-        w.activitySites = w.activitySites.filter((s) => s.activityId !== id);
-      }
-      applyPatch<Activity>("activity", a, next as Partial<Activity>);
-      return clone(a);
-    }),
-  removeActivity: async (id) => {
+  updateActivity: async (id, patch) => {
     const scope = scopeNow();
-    const lines = await lineSnapshot(scope);
+    const { deliveries } =
+      patch.kind !== undefined ? await budgetSnapshot(scope) : { deliveries: [] };
     return wtx(
       () => {
+        const w = wdb();
+        const a = activityOf(id);
+        if (
+          patch.kind !== undefined &&
+          patch.kind !== a.kind &&
+          deliveries.some((d) => d.activityId === id)
+        )
+          throw new Error(KIND_CHANGE_BLOCK);
+        const next: Partial<ActivityInput> = { ...patch };
+        for (const k of [
+          "code",
+          "output",
+          "meansOfVerification",
+          "frequencyLabel",
+          "notes",
+        ] as const) {
+          const v = next[k];
+          if (v !== undefined) next[k] = v.trim();
+        }
+        if (next.title !== undefined) next.title = need(next.title, "activity");
+        const every = "repeatEvery" in next ? next.repeatEvery : a.repeatEvery;
+        const unit = "repeatUnit" in next ? next.repeatUnit : a.repeatUnit;
+        const bad = validateRepeat(every, unit);
+        if (bad) throw new Error(bad);
+        if (next.kind === "general" && a.kind === "site") {
+          w.activitySites
+            .filter((s) => s.activityId === id)
+            .forEach((s) =>
+              audit("activity site", `${id}:${s.siteId}`, "(deleted)", s.siteId, null),
+            );
+          w.activitySites = w.activitySites.filter((s) => s.activityId !== id);
+        }
+        applyPatch<Activity>("activity", a, next as Partial<Activity>);
+        return clone(a);
+      },
+      {},
+      scope,
+    );
+  },
+  removeActivity: async (id) => {
+    const scope = scopeNow();
+    const { lines, deliveries } = await budgetSnapshot(scope);
+    return wtx(
+      () => {
+        const held = parentDeleteBlock("activity", deliveriesUnder(new Set([id]), deliveries));
+        if (held) throw new Error(held);
         const bad = fundedDeleteMessage("activity", linesUnder([id], lines));
         if (bad) throw new Error(bad);
         removeActivityLocal(id);
@@ -747,13 +859,21 @@ export const workplanRepo: WorkplanRepo = {
         ...("target" in patch && { target: patch.target ?? undefined }),
       });
     }),
-  removeIndicator: (id) =>
-    wtx(() => {
-      const w = wdb();
-      const i = w.indicators.find((x) => x.id === id);
-      w.indicators = w.indicators.filter((x) => x.id !== id);
-      audit("indicator", id, "(deleted)", i?.name, null);
-    }),
+  removeIndicator: async (id) => {
+    const scope = scopeNow();
+    const { results } = await budgetSnapshot(scope);
+    return wtx(
+      () => {
+        if (results.some((r) => r.indicatorId === id)) throw new Error(INDICATOR_DELETE_BLOCK);
+        const w = wdb();
+        const i = w.indicators.find((x) => x.id === id);
+        w.indicators = w.indicators.filter((x) => x.id !== id);
+        audit("indicator", id, "(deleted)", i?.name, null);
+      },
+      {},
+      scope,
+    );
+  },
 
   addResponsibles: (activityId, input) =>
     wtx(() => {
@@ -795,39 +915,50 @@ export const workplanRepo: WorkplanRepo = {
       audit("responsible", id, "(deleted)", r?.name, null);
     }),
 
-  setActivitySites: (activityId, siteIds) =>
-    wtx(() => {
-      const w = wdb();
-      const a = activityOf(activityId);
-      const want = new Set(siteIds);
-      if (a.kind !== "site" && want.size) throw new Error("Only site activities can have sites.");
-      const have = new Set(
-        w.activitySites.filter((s) => s.activityId === activityId).map((s) => s.siteId),
-      );
-      for (const siteId of want) {
-        if (have.has(siteId)) continue;
-        const site = found(
-          w.sites.find((s) => s.id === siteId),
-          "Site",
+  setActivitySites: async (activityId, siteIds) => {
+    const scope = scopeNow();
+    const { deliveries } = await budgetSnapshot(scope);
+    return wtx(
+      () => {
+        const w = wdb();
+        const a = activityOf(activityId);
+        const want = new Set(siteIds);
+        if (a.kind !== "site" && want.size) throw new Error("Only site activities can have sites.");
+        const have = new Set(
+          w.activitySites.filter((s) => s.activityId === activityId).map((s) => s.siteId),
         );
-        if (site.archivedAt) throw new Error(`${site.name} is archived. Restore it first.`);
-        w.activitySites.push({ activityId, siteId });
-        audit("activity site", `${activityId}:${siteId}`, "(created)", null, site.name);
-      }
-      for (const siteId of have)
-        if (!want.has(siteId)) {
-          w.activitySites = w.activitySites.filter(
-            (s) => !(s.activityId === activityId && s.siteId === siteId),
+        for (const siteId of want) {
+          if (have.has(siteId)) continue;
+          const site = found(
+            w.sites.find((s) => s.id === siteId),
+            "Site",
           );
-          audit(
-            "activity site",
-            `${activityId}:${siteId}`,
-            "(deleted)",
-            w.sites.find((s) => s.id === siteId)?.name ?? siteId,
-            null,
-          );
+          if (site.archivedAt) throw new Error(`${site.name} is archived. Restore it first.`);
+          w.activitySites.push({ activityId, siteId });
+          audit("activity site", `${activityId}:${siteId}`, "(created)", null, site.name);
         }
-    }),
+        for (const siteId of have)
+          if (!want.has(siteId)) {
+            if (deliveries.some((d) => d.activityId === activityId && d.siteId === siteId))
+              throw new Error(
+                siteRemovalBlock(w.sites.find((x) => x.id === siteId)?.name ?? "That site"),
+              );
+            w.activitySites = w.activitySites.filter(
+              (s) => !(s.activityId === activityId && s.siteId === siteId),
+            );
+            audit(
+              "activity site",
+              `${activityId}:${siteId}`,
+              "(deleted)",
+              w.sites.find((s) => s.id === siteId)?.name ?? siteId,
+              null,
+            );
+          }
+      },
+      {},
+      scope,
+    );
+  },
 };
 
 export const siteRepo: SiteRepo = {
@@ -876,6 +1007,199 @@ export const siteRepo: SiteRepo = {
       },
       { sites: true },
     ),
+};
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const deliveryOf = (id: string) =>
+  found(
+    db().deliveries.find((x) => x.id === id),
+    "Round",
+  );
+function siteLabel(siteId?: string) {
+  return siteId ? (db().sites.find((s) => s.id === siteId)?.name ?? "a site") : "";
+}
+const deliveryText = (x: Delivery) =>
+  `${roundText(x)}${x.siteId ? ` at ${siteLabel(x.siteId)}` : ""}`;
+function activeSelected(activityId: string) {
+  const d = db();
+  return d.activitySites
+    .filter((s) => s.activityId === activityId)
+    .map((s) => ({ id: s.siteId, archived: !!d.sites.find((x) => x.id === s.siteId)?.archivedAt }));
+}
+function newDelivery(
+  activityId: string,
+  v: Omit<Delivery, "id" | "activityId" | "status" | "notes">,
+) {
+  const x: Delivery = { ...v, id: uid(), activityId, status: "planned", notes: "" };
+  db().deliveries.push(x);
+  audit("delivery", x.id, "(created)", null, deliveryText(x));
+  return x;
+}
+
+export const deliveryRepo: DeliveryRepo = {
+  list: () => read((d) => ({ deliveries: d.deliveries, results: d.results })),
+  generate: (activityId, input) =>
+    tx(() => {
+      const d = db();
+      const a = found(
+        d.activities.find((x) => x.id === activityId),
+        "Activity",
+      );
+      if (input.firstDate && !YMD.test(input.firstDate))
+        throw new Error("Enter the first date as year, month and day.");
+      const sites = activeSelected(activityId);
+      const bad = validateRounds(input.rounds, a.kind, sites.filter((s) => !s.archived).length);
+      if (bad) throw new Error(bad);
+      const plan = planRounds({
+        kind: a.kind,
+        rounds: input.rounds,
+        sites,
+        existing: d.deliveries.filter((x) => x.activityId === activityId),
+        firstDate: input.firstDate,
+        repeat: input.repeat,
+        year: d.period,
+      });
+      for (const c of plan.create)
+        newDelivery(activityId, {
+          roundNumber: c.roundNumber,
+          roundLabel: "",
+          siteId: c.siteId,
+          plannedDate: c.plannedDate,
+        });
+      return {
+        created: plan.create.length,
+        existing: plan.existing,
+        outsideYear: plan.outsideYear,
+      };
+    }),
+  add: (activityId, input) =>
+    tx(() => {
+      const d = db();
+      const a = found(
+        d.activities.find((x) => x.id === activityId),
+        "Activity",
+      );
+      const mine = d.deliveries.filter((x) => x.activityId === activityId);
+      const siteId = input.siteId || undefined;
+      if (a.kind === "general" && siteId)
+        throw new Error("A general activity is not tied to a site.");
+      if (a.kind === "site") {
+        if (!siteId) throw new Error("Choose the site for this round.");
+        const sel = activeSelected(activityId).find((s) => s.id === siteId);
+        if (!sel) throw new Error("That site is not selected on this activity.");
+        if (sel.archived)
+          throw new Error("That site is archived. Restore it before adding rounds there.");
+      }
+      const round = input.roundNumber ?? nextRound(mine, siteId);
+      if (!Number.isInteger(round) || round < 1)
+        throw new Error("The round must be a whole number above zero.");
+      if (isDuplicateRound(mine, round, siteId))
+        throw new Error(
+          `Round ${round}${siteId ? ` at ${siteLabel(siteId)}` : ""} already exists.`,
+        );
+      const bad = validateDelivery({ status: "planned", plannedDate: input.plannedDate });
+      if (bad) throw new Error(bad);
+      return clone(
+        newDelivery(activityId, {
+          roundNumber: round,
+          roundLabel: input.roundLabel?.trim() ?? "",
+          siteId,
+          plannedDate: input.plannedDate || undefined,
+        }),
+      );
+    }),
+  update: (id, patch) =>
+    tx(() => {
+      const x = deliveryOf(id);
+      const next = { ...patch };
+      if (next.roundLabel !== undefined) next.roundLabel = next.roundLabel.trim();
+      const bad = validateDelivery({
+        status: next.status ?? x.status,
+        plannedDate: "plannedDate" in next ? next.plannedDate : x.plannedDate,
+        actualDate: "actualDate" in next ? next.actualDate : x.actualDate,
+      });
+      if (bad) throw new Error(bad);
+      applyPatch<Delivery>("delivery", x, next);
+      return clone(x);
+    }),
+  remove: (id) =>
+    tx(() => {
+      const d = db();
+      const x = deliveryOf(id);
+      const bad = deliveryDeleteBlock({
+        linkedSpending: d.events.filter((e) => e.deliveryId === id).length,
+        proofFiles: d.attachments.filter((a) => a.deliveryId === id).length,
+      });
+      if (bad) throw new Error(bad);
+      d.results
+        .filter((r) => r.deliveryId === id)
+        .forEach((r) =>
+          audit("delivery result", `${id}:${r.indicatorId}`, "(deleted)", r.value, null),
+        );
+      d.results = d.results.filter((r) => r.deliveryId !== id);
+      d.deliveries = d.deliveries.filter((y) => y.id !== id);
+      audit("delivery", id, "(deleted)", deliveryText(x), null);
+    }),
+  setResult: (deliveryId, indicatorId, value, notes = "") =>
+    tx(() => {
+      const d = db();
+      const x = deliveryOf(deliveryId);
+      if (!d.indicators.some((i) => i.id === indicatorId && i.activityId === x.activityId))
+        throw new Error("That indicator belongs to a different activity than this delivery.");
+      const key = `${deliveryId}:${indicatorId}`;
+      const cur = d.results.find(
+        (r) => r.deliveryId === deliveryId && r.indicatorId === indicatorId,
+      );
+      if (value === null) {
+        if (!cur) return;
+        d.results = d.results.filter((r) => r !== cur);
+        audit("delivery result", key, "(deleted)", cur.value, null);
+        return;
+      }
+      if (!Number.isFinite(value) || value < 0) throw new Error("A result cannot be negative.");
+      if (!cur) {
+        d.results.push({ deliveryId, indicatorId, value, notes: notes.trim() });
+        audit("delivery result", key, "(created)", null, value);
+      } else {
+        if (cur.value !== value) audit("delivery result", key, "value", cur.value, value);
+        if (cur.notes !== notes.trim())
+          audit("delivery result", key, "notes", cur.notes, notes.trim());
+        cur.value = value;
+        cur.notes = notes.trim();
+      }
+    }),
+  linkEvents: (deliveryId, eventIds) =>
+    tx(() => {
+      const d = db();
+      const x = deliveryOf(deliveryId);
+      let n = 0;
+      for (const id of eventIds) {
+        const e = found(
+          d.events.find((y) => y.id === id),
+          "Spending record",
+        );
+        const bad = validateEventLink(
+          d.lines.find((l) => l.id === e.lineId),
+          x,
+          e,
+        );
+        if (bad) throw new Error(bad);
+        if (e.deliveryId === deliveryId) continue;
+        applyPatch<BudgetEvent>("event", e, { deliveryId });
+        n++;
+      }
+      return n;
+    }),
+  unlinkEvents: (eventIds) =>
+    tx(() => {
+      let n = 0;
+      for (const e of db().events)
+        if (eventIds.includes(e.id) && e.deliveryId) {
+          applyPatch<BudgetEvent>("event", e, { deliveryId: undefined });
+          n++;
+        }
+      return n;
+    }),
 };
 
 export const auditRepo: AuditRepo = { list: () => listAudit(activeStudyId()) };

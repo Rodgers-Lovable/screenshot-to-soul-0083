@@ -329,7 +329,11 @@ export function LineEditor({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={!!preview.blocked || !options.length}>
+            <Button
+              type="submit"
+              loading={create.isPending || update.isPending}
+              disabled={!!preview.blocked || !options.length}
+            >
               {line ? "Save changes" : "Add line"}
             </Button>
           </SheetFooter>

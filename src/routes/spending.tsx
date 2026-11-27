@@ -32,7 +32,8 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { useBudgetData } from "@/data/hooks";
+import { useBudgetData, useWorkplan } from "@/data/hooks";
+import { roundText } from "@/lib/deliveries";
 import {
   eventFigures,
   eventFlags,
@@ -61,6 +62,7 @@ export type EventFlagFilter =
 export interface SpendingSearch {
   tab?: EventTab;
   activity?: string;
+  delivery?: string;
   line?: string;
   month?: string;
   flag?: EventFlagFilter;
@@ -87,6 +89,7 @@ export const Route = createFileRoute("/spending")({
   validateSearch: (s: Record<string, unknown>): SpendingSearch => ({
     tab: TABS.some((t) => t.v === s.tab) ? (s.tab as EventTab) : undefined,
     activity: str(s.activity),
+    delivery: str(s.delivery),
     line: str(s.line),
     month: str(s.month),
     q: str(s.q),
@@ -134,7 +137,33 @@ function SpendingPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [scheduling, setScheduling] = useState<BudgetLine | null>(null);
 
-  const hasFilter = !!(search.activity || search.line || search.month || search.flag || search.q);
+  const wp = useWorkplan();
+  const hasFilter = !!(
+    search.activity ||
+    search.delivery ||
+    search.line ||
+    search.month ||
+    search.flag ||
+    search.q
+  );
+  // "Round 2 at Site A", in the activity's words, for the delivery filter and the rows.
+  const deliveryText = useMemo(() => {
+    const sites = new Map((wp.data?.sites ?? []).map((x) => [x.id, x.name]));
+    return new Map(
+      d.deliveries.map((x) => {
+        const a = d.activities.find((y) => y.id === x.activityId);
+        const where = x.siteId ? ` at ${sites.get(x.siteId) ?? "a site"}` : "";
+        return [
+          x.id,
+          {
+            short: `${roundText(x)}${where}`,
+            long: `${a?.title ?? ""} · ${roundText(x)}${where}`,
+            activityId: x.activityId,
+          },
+        ];
+      }),
+    );
+  }, [d.deliveries, d.activities, wp.data]);
   // Dashboard links pass only a flag, so filtered visits open on "All".
   const tab: EventTab = search.tab ?? (hasFilter ? "all" : "action");
   const view = search.view ?? "grouped";
@@ -148,7 +177,8 @@ function SpendingPage() {
       d.lines.filter((l) => lineFlags(lineSummary(l, d.events)).length).map((l) => l.id),
     );
     const evidence = new Map<string, number>();
-    for (const a of d.attachments) evidence.set(a.eventId, (evidence.get(a.eventId) ?? 0) + 1);
+    for (const a of d.attachments)
+      if (a.eventId) evidence.set(a.eventId, (evidence.get(a.eventId) ?? 0) + 1);
     const q = search.q?.toLowerCase();
     return d.events.flatMap((e) => {
       const line = lineById.get(e.lineId);
@@ -157,6 +187,7 @@ function SpendingPage() {
       const flags = eventFlags(e, n, today);
       if (search.activity && line.activityId !== search.activity) return [];
       if (search.line && line.id !== search.line) return [];
+      if (search.delivery && e.deliveryId !== search.delivery) return [];
       if (
         search.month &&
         !(e.actualDate ?? e.plannedDate ?? "").startsWith(search.month) &&
@@ -323,7 +354,7 @@ function SpendingPage() {
         <FilterSelect
           label="Activity"
           value={search.activity}
-          onChange={(v) => set({ activity: v, line: undefined })}
+          onChange={(v) => set({ activity: v, line: undefined, delivery: undefined })}
           opts={activityOptions({
             objectives: d.objectives,
             outcomes: d.outcomes,
@@ -338,6 +369,16 @@ function SpendingPage() {
           opts={d.lines
             .filter((l) => !search.activity || l.activityId === search.activity)
             .map((l) => ({ v: l.id, l: l.description }))}
+          all={ALL}
+        />
+        <FilterSelect
+          label="Round"
+          plural="rounds"
+          value={search.delivery}
+          onChange={(v) => set({ delivery: v })}
+          opts={[...deliveryText.entries()]
+            .filter(([, t]) => !search.activity || t.activityId === search.activity)
+            .map(([id, t]) => ({ v: id, l: t.long }))}
           all={ALL}
         />
         <FilterSelect
@@ -501,6 +542,11 @@ function SpendingPage() {
                         >
                           <td className="pl-12! text-muted-foreground tabular-nums">
                             Occurrence {e.sequence} of {g.lineEvents.length}
+                            {e.deliveryId && (
+                              <span className="block text-xs">
+                                Delivery: {deliveryText.get(e.deliveryId)?.short}
+                              </span>
+                            )}
                           </td>
                           <td>
                             <StatusChip status={e.status} />
@@ -537,6 +583,7 @@ function SpendingPage() {
                 {th("date", tab === "done" ? "Date" : "Planned date")}
                 {th("title", "Event")}
                 <th className="px-3 py-2 text-left font-medium">Line</th>
+                <th className="px-3 py-2 text-left font-medium">Round</th>
                 {th("status", "Status")}
                 <th className="px-3 py-2 text-left font-medium">Flags</th>
                 {th("actual", "Actual", true)}
@@ -559,6 +606,13 @@ function SpendingPage() {
                   </td>
                   <td className="max-w-55 text-muted-foreground">
                     <Truncated text={line.description} />
+                  </td>
+                  <td className="max-w-45 text-muted-foreground">
+                    {e.deliveryId ? (
+                      <Truncated text={deliveryText.get(e.deliveryId)?.short ?? ""} />
+                    ) : (
+                      "None"
+                    )}
                   </td>
                   <td>
                     <StatusChip status={e.status} />
@@ -677,8 +731,10 @@ function FilterSelect({
   onChange,
   opts,
   all,
+  plural,
 }: {
   label: string;
+  plural?: string;
   value?: string;
   onChange: (v: string | undefined) => void;
   opts: { v: string; l: string }[];
@@ -687,12 +743,14 @@ function FilterSelect({
   return (
     <Select value={value ?? all} onValueChange={(v) => onChange(v === all ? undefined : v)}>
       <SelectTrigger className="h-9 w-auto max-w-55" aria-label={label}>
-        <Truncated text={opts.find((o) => o.v === value)?.l ?? `All ${label.toLowerCase()}s`}>
+        <Truncated
+          text={opts.find((o) => o.v === value)?.l ?? `All ${plural ?? `${label.toLowerCase()}s`}`}
+        >
           <SelectValue />
         </Truncated>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={all}>All {label.toLowerCase()}s</SelectItem>
+        <SelectItem value={all}>All {plural ?? `${label.toLowerCase()}s`}</SelectItem>
         {opts.map((o) => (
           <SelectItem key={o.v} value={o.v}>
             {o.l}
@@ -768,11 +826,20 @@ function Calendar({
               className={cn(
                 "min-h-24 border-b border-r p-1",
                 day.getMonth() !== month.getMonth() && "bg-muted/40",
-                k === today && "bg-accent/40",
+                k === today && "bg-primary/30",
               )}
+              aria-current={k === today ? "date" : undefined}
             >
-              <div className="mb-1 text-right tabular-nums text-muted-foreground">
-                {day.getDate()}
+              <div className="mb-1 flex justify-end">
+                <span
+                  className={cn(
+                    "tabular-nums text-muted-foreground",
+                    k === today &&
+                      "flex size-6 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground",
+                  )}
+                >
+                  {day.getDate()}
+                </span>
               </div>
               <div className="space-y-1">
                 {list.map(({ e, flags }) => (

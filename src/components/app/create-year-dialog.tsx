@@ -184,7 +184,7 @@ function YearForm({ years, onDone }: { years: BudgetPeriod[]; onDone: () => void
         <p className="text-sm text-destructive">{problem}</p>
       )}
       <DialogFooter>
-        <Button type="submit" disabled={!!problem || create.isPending}>
+        <Button type="submit" loading={create.isPending} disabled={!!problem}>
           Create year
         </Button>
       </DialogFooter>

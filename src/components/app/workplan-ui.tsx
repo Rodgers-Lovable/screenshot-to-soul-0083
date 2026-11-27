@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertTriangle, Circle, Layers, MapPin } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, CircleDot, Layers, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -29,7 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { ActivityKind, RepeatUnit } from "@/lib/types";
+import type { ActivityKind, DeliveryStatus, RepeatUnit } from "@/lib/types";
+import { DELIVERY_STATUS_LABEL } from "@/lib/deliveries";
 import {
   activityFormValid,
   blankActivity,
@@ -48,12 +49,31 @@ export function KindChip({ kind }: { kind: ActivityKind }) {
   );
 }
 
-/** Delivery tracking comes later, so every activity reads as planned for now. */
-export function PlannedChip() {
+const STATUS_STYLE: Record<DeliveryStatus, { I: typeof Circle; cls: string }> = {
+  planned: { I: Circle, cls: "bg-card" },
+  in_progress: { I: CircleDot, cls: "border-warning/40 bg-warning-soft text-warning-foreground" },
+  completed: { I: CheckCircle2, cls: "border-primary/30 bg-accent text-accent-foreground" },
+};
+
+/** Status of an activity or a delivery, with an optional progress count such as "2 of 5". */
+export function DeliveryStatusChip({
+  status,
+  progress,
+}: {
+  status: DeliveryStatus;
+  progress?: string;
+}) {
+  const { I, cls } = STATUS_STYLE[status];
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded border bg-card px-1.5 py-0.5 text-[11px] font-medium">
-      <Circle className="h-3 w-3" aria-hidden />
-      Planned
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] font-medium",
+        cls,
+      )}
+    >
+      <I className="h-3 w-3" aria-hidden />
+      {DELIVERY_STATUS_LABEL[status]}
+      {progress && <span className="font-normal tabular-nums opacity-80">· {progress}</span>}
     </span>
   );
 }
@@ -168,7 +188,7 @@ function CodeTitleForm({
         />
       </div>
       <DialogFooter>
-        <Button type="submit" disabled={!title.trim() || pending}>
+        <Button type="submit" loading={pending} disabled={!title.trim()}>
           Save
         </Button>
       </DialogFooter>
@@ -324,7 +344,7 @@ export function ActivityDialog({
         </DialogHeader>
         <ActivityFields value={v} onChange={setV} idPrefix="new-activity" />
         <DialogFooter>
-          <Button disabled={!activityFormValid(v) || pending} onClick={() => onSave(v)}>
+          <Button loading={pending} disabled={!activityFormValid(v)} onClick={() => onSave(v)}>
             Add activity
           </Button>
         </DialogFooter>
