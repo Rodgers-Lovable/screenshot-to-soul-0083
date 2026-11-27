@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useOnChange } from "@/hooks/use-on-change";
 import { toast } from "sonner";
 import { Check, ChevronDown, Copy, Info, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -71,7 +72,7 @@ export const Route = createFileRoute("/budget")({
 
 function BudgetPage() {
   const d = useBudgetData();
-  const { canEdit, closed } = useYear();
+  const { closed } = useYear();
   const f = useFmt();
   const [q, setQ] = useState("");
   const [activityId, setActivityId] = useState("");
@@ -316,7 +317,7 @@ function ActivityBlock({
             <tbody>
               {groups.map((g) => {
                 const gl = lines.filter((l) => (l.groupLabel ?? "") === g);
-                const gs = sumSummaries(gl.map((l) => sums.get(l.id)!));
+                const gs = sumSummaries(gl.flatMap((l) => sums.get(l.id) ?? []));
                 return [
                   g && (
                     <tr key={`g-${g}`} className="bg-secondary/60">
@@ -338,16 +339,21 @@ function ActivityBlock({
                       <td colSpan={3} />
                     </tr>
                   ),
-                  ...gl.map((l) => (
-                    <LineRow
-                      key={l.id}
-                      line={l}
-                      s={sums.get(l.id)!}
-                      onEdit={() => onEdit(l)}
-                      onMove={() => onMove(l)}
-                      onDelete={() => onDelete(l)}
-                    />
-                  )),
+                  ...gl
+                    .flatMap((l) => {
+                      const s = sums.get(l.id);
+                      return s ? [{ l, s }] : [];
+                    })
+                    .map(({ l, s }) => (
+                      <LineRow
+                        key={l.id}
+                        line={l}
+                        s={s}
+                        onEdit={() => onEdit(l)}
+                        onMove={() => onMove(l)}
+                        onDelete={() => onDelete(l)}
+                      />
+                    )),
                 ];
               })}
             </tbody>
@@ -472,9 +478,7 @@ function DeleteLineDialog({
   const rm = useRemoveLine();
   const [typed, setTyped] = useState("");
   const ok = !hasDone || typed.trim() === line?.description;
-  useEffect(() => {
-    setTyped("");
-  }, [line?.id]);
+  useOnChange(line?.id, () => setTyped(""));
   return (
     <Dialog
       open={!!line}

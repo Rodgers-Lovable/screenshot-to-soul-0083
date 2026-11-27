@@ -35,7 +35,9 @@ import {
   useWorkplan,
 } from "@/data/hooks";
 import { eventFigures, eventPlanned } from "@/lib/calc";
-import { groupByRound, offerRoundDone, roundText } from "@/lib/deliveries";
+import { deliveryLabel, groupByRound, offerRoundDone, roundText } from "@/lib/deliveries";
+import { EVIDENCE_ACCEPT, checkEvidenceFiles } from "@/lib/evidence";
+import { SELECT_NONE } from "@/lib/select";
 import { durationLabel, kesToCents, todayISO } from "@/lib/format";
 import type { BudgetEvent, BudgetLine, EventStatus } from "@/lib/types";
 import { StatusChip } from "./chips";
@@ -52,10 +54,6 @@ const schema = z.object({
 type FormIn = z.input<typeof schema>;
 type FormOut = z.output<typeof schema>;
 
-const ACCEPT = ".pdf,.jpg,.jpeg,.png,.xlsx";
-const OK_TYPES = /\.(pdf|jpe?g|png|xlsx)$/i;
-const MAX = 10 * 1024 * 1024;
-const NO_DELIVERY = "__none";
 const unitWord = (u: string, n: number) =>
   u === "pax" ? (n === 1 ? "participant" : "participants") : u;
 
@@ -80,7 +78,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const [pending, setPending] = useState<{ file: File; label: string }[]>([]);
   const [drag, setDrag] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [deliveryId, setDeliveryId] = useState(ev.deliveryId ?? NO_DELIVERY);
+  const [deliveryId, setDeliveryId] = useState(ev.deliveryId ?? SELECT_NONE);
   const wp = useWorkplan();
   const siteOf = (id?: string) => wp.data?.sites.find((x) => x.id === id)?.name;
   // A site activity's round already names the site; keep an old location visible.
@@ -96,8 +94,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
   const [offer, setOffer] = useState<{ id: string; name: string; date: string } | null>(null);
   const roundName = (id: string) => {
     const x = data.deliveries.find((d) => d.id === id);
-    if (!x) return "";
-    return `${roundText(x)}${x.siteId ? ` at ${siteOf(x.siteId) ?? "a site"}` : ""}`;
+    return x ? deliveryLabel(x, siteOf) : "";
   };
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -148,19 +145,9 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
 
   function addFiles(list: FileList | null) {
     if (!list || !canEdit) return;
-    const next: { file: File; label: string }[] = [];
-    for (const file of Array.from(list)) {
-      if (!OK_TYPES.test(file.name)) {
-        toast.error(`${file.name}: only PDF, JPG, PNG or XLSX`);
-        continue;
-      }
-      if (file.size > MAX) {
-        toast.error(`${file.name} is over 10 MB`);
-        continue;
-      }
-      next.push({ file, label: "" });
-    }
-    setPending((p) => [...p, ...next]);
+    const { ok, problems } = checkEvidenceFiles(Array.from(list));
+    problems.forEach((m) => toast.error(m));
+    setPending((p) => [...p, ...ok.map((file) => ({ file, label: "" }))]);
   }
 
   async function uploadPending() {
@@ -201,7 +188,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           actualUnitCostCents: kesToCents(v.unitCost),
           actualDuration: v.duration,
           location: v.location || undefined,
-          deliveryId: deliveryId === NO_DELIVERY ? undefined : deliveryId,
+          deliveryId: deliveryId === SELECT_NONE ? undefined : deliveryId,
           notes:
             extraNotes !== undefined
               ? [v.notes, `Cancelled: ${extraNotes}`].filter(Boolean).join("\n")
@@ -321,7 +308,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_DELIVERY}>Not tied to a round</SelectItem>
+                <SelectItem value={SELECT_NONE}>Not tied to a round</SelectItem>
                 {choices.map((x) => (
                   <SelectItem key={x.id} value={x.id}>
                     {roundText(x)}
@@ -378,7 +365,7 @@ function Inner({ ev, line, onDone }: { ev: BudgetEvent; line: BudgetLine; onDone
           ref={inputRef}
           type="file"
           multiple
-          accept={ACCEPT}
+          accept={EVIDENCE_ACCEPT}
           className="hidden"
           onChange={(e) => {
             addFiles(e.target.files);

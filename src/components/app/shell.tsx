@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  BookOpen,
   ClipboardCheck,
   CircleHelp,
   LayoutDashboard,
@@ -135,6 +136,17 @@ function ShellInner({ children }: { children: ReactNode }) {
             >
               <ClipboardCheck className="h-4 w-4" />
               <span className="hidden sm:inline">Record actuals</span>
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="User manual"
+              title="User manual"
+              asChild
+            >
+              <Link to="/help">
+                <BookOpen className="h-4 w-4" />
+              </Link>
             </Button>
             <Button
               size="icon"

@@ -33,8 +33,17 @@ export default tseslint.config(
         },
       ],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
-      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", destructuredArrayIgnorePattern: "^_" },
+      ],
     },
+  },
+  {
+    // Fixtures and tests know their data, so assertions are fine there.
+    files: ["src/test/**", "**/*.test.{ts,tsx}", "src/routeTree.gen.ts", "src/components/ui/**"],
+    rules: { "@typescript-eslint/no-non-null-assertion": "off" },
   },
   eslintPluginPrettier,
 );

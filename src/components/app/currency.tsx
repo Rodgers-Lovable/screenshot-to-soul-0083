@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { formatKES, formatUSD } from "@/lib/format";
 import { usePeriod } from "@/data/hooks";
@@ -7,15 +7,26 @@ import { cn } from "@/lib/utils";
 type Cur = "KES" | "USD";
 const Ctx = createContext<{ cur: Cur; setCur: (c: Cur) => void }>({ cur: "KES", setCur: () => {} });
 
+const CURRENCY_KEY = "pbt-currency";
+// The app shell renders on the client only, so storage is there on first render.
+function readCurrency(): Cur {
+  try {
+    const v = localStorage.getItem(CURRENCY_KEY);
+    return v === "USD" ? "USD" : "KES";
+  } catch {
+    return "KES";
+  }
+}
+
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [cur, setCurState] = useState<Cur>("KES");
-  useEffect(() => {
-    const v = localStorage.getItem("pbt-currency");
-    if (v === "USD" || v === "KES") setCurState(v);
-  }, []);
+  const [cur, setCurState] = useState<Cur>(readCurrency);
   const setCur = (c: Cur) => {
     setCurState(c);
-    localStorage.setItem("pbt-currency", c);
+    try {
+      localStorage.setItem(CURRENCY_KEY, c);
+    } catch {
+      // The choice just isn't remembered.
+    }
   };
   return <Ctx.Provider value={{ cur, setCur }}>{children}</Ctx.Provider>;
 }

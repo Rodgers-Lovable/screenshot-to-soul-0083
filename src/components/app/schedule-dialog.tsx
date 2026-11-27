@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
 import { AlertTriangle, Lock } from "lucide-react";
@@ -57,26 +57,31 @@ export function ScheduleDialog({
   const [repeat, setRepeat] = useState("1m");
   const [custom, setCustom] = useState<Record<number, string>>({});
 
-  useEffect(() => {
-    if (!line) return;
-    const firstDated = sorted.find((e) => e.plannedDate)?.plannedDate;
-    setFirst(firstDated ?? period?.startDate ?? todayISO());
-    setMode(sorted.length > 1 ? "repeat" : "custom");
-    setCustom(Object.fromEntries(sorted.map((e) => [e.sequence, e.plannedDate ?? ""])));
-  }, [line?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Start fresh each time the dialog opens for a line.
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  if ((line?.id ?? null) !== openFor) {
+    setOpenFor(line?.id ?? null);
+    if (line) {
+      const firstDated = sorted.find((e) => e.plannedDate)?.plannedDate;
+      setFirst(firstDated ?? period?.startDate ?? todayISO());
+      setMode(sorted.length > 1 ? "repeat" : "custom");
+      setCustom(Object.fromEntries(sorted.map((e) => [e.sequence, e.plannedDate ?? ""])));
+    }
+  }
 
-  const generated = useMemo(
-    () => (first ? scheduleDates(first, sorted.length, REPEATS[repeat]!.r) : []),
-    [first, repeat, sorted.length],
-  );
+  const generated = useMemo(() => {
+    const rule = REPEATS[repeat]?.r;
+    return first && rule ? scheduleDates(first, sorted.length, rule) : [];
+  }, [first, repeat, sorted.length]);
   const proposed = (e: BudgetEvent, i: number) =>
     e.status !== "planned" ? e.plannedDate : mode === "repeat" ? generated[i] : custom[e.sequence];
-  const outside = period
-    ? sorted.filter((e, i) => {
-        const d = proposed(e, i);
-        return e.status === "planned" && d && (d < period.startDate || d > period.endDate);
-      }).length
-    : 0;
+  const outside =
+    period?.startDate && period.endDate
+      ? sorted.filter((e, i) => {
+          const d = proposed(e, i);
+          return e.status === "planned" && d && (d < period.startDate || d > period.endDate);
+        }).length
+      : 0;
 
   const save = () => {
     if (!line) return;

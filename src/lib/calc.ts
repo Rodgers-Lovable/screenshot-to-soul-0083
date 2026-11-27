@@ -169,12 +169,19 @@ export function eventFlags(ev: BudgetEvent, attachmentCount: number, today: stri
 }
 
 /** Month keys (YYYY-MM) covering the period. */
+const yearMonth = (iso: string): [number, number] | null => {
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(iso);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+};
+
 export function periodMonths(period: BudgetPeriod): string[] {
   const out: string[] = [];
-  const [sy, sm] = period.startDate.split("-").map(Number);
-  const [ey, em] = period.endDate.split("-").map(Number);
-  let y = sy,
-    m = sm;
+  const start = yearMonth(period.startDate);
+  const end = yearMonth(period.endDate);
+  // A year without both dates has no months yet.
+  if (!start || !end) return out;
+  const [ey, em] = end;
+  let [y, m] = start;
   // Period starting on the 30th of a month is treated as starting the following month.
   if (Number(period.startDate.slice(8)) >= 28) {
     m++;
@@ -229,9 +236,11 @@ export function cumulativeByMonth(
 }
 
 function clampMonth(k: string, months: string[]) {
-  if (!months.length) return k;
-  if (k < months[0]) return months[0];
-  if (k > months[months.length - 1]) return months[months.length - 1];
+  const first = months[0];
+  const last = months[months.length - 1];
+  if (first === undefined || last === undefined) return k;
+  if (k < first) return first;
+  if (k > last) return last;
   return k;
 }
 
@@ -279,7 +288,7 @@ export function scheduleDates(first: string, count: number, r: Repeat): string[]
 }
 
 export type EventTab = "action" | "month" | "upcoming" | "done" | "all";
-export const UPCOMING_DAYS = 60;
+export const UPCOMING_DAYS = 30;
 
 /** Whether an event belongs on a tab of the Events page. */
 export function inEventTab(ev: BudgetEvent, flags: FlagKind[], tab: EventTab, today: string) {

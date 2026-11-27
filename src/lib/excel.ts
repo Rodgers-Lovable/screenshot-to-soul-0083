@@ -74,7 +74,7 @@ export function parseBudgetRows(rows: unknown[][]): { blocks: ParsedBlock[]; row
       blocks.push({ index: blocks.length, heading: desc });
       continue;
     }
-    const du = durUnitOf(cDur >= 0 ? header[cDur] : "", cDurUnit >= 0 ? r[cDurUnit] : "");
+    const du = durUnitOf(cDur >= 0 ? (header[cDur] ?? "") : "", cDurUnit >= 0 ? r[cDurUnit] : "");
     out.push({
       block: blocks.length - 1,
       description: desc,
@@ -92,7 +92,9 @@ export function parseBudgetRows(rows: unknown[][]): { blocks: ParsedBlock[]; row
 
 export async function readWorkbook(file: File): Promise<unknown[][]> {
   const wb = XLSX.read(await file.arrayBuffer());
-  const ws = wb.Sheets[wb.SheetNames[0]];
+  const first = wb.SheetNames[0];
+  const ws = first === undefined ? undefined : wb.Sheets[first];
+  if (!ws) return [];
   return XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: null });
 }
 

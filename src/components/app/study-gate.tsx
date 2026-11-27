@@ -54,6 +54,9 @@ export function StudyGate({ children }: { children: ReactNode }) {
         <p className="text-sm text-muted-foreground">
           A study admin must add you to a study. Once they have, reload this page.
         </p>
+        <a href="/help" className="block text-sm text-muted-foreground underline">
+          Read the user manual
+        </a>
         <Button variant="outline" onClick={() => supabase.auth.signOut()}>
           Sign out
         </Button>

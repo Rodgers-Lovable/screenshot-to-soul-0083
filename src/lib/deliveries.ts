@@ -59,6 +59,12 @@ export function byActivity(deliveries: Delivery[]): Map<string, Delivery[]> {
 export const roundText = (d: Pick<Delivery, "roundNumber" | "roundLabel">) =>
   d.roundLabel.trim() ? `Round ${d.roundNumber}: ${d.roundLabel.trim()}` : `Round ${d.roundNumber}`;
 
+/** "Round 2 at Site A". A site that can't be found reads as "a site". */
+export const deliveryLabel = (
+  d: Pick<Delivery, "roundNumber" | "roundLabel" | "siteId">,
+  siteName: (id: string) => string | undefined,
+) => (d.siteId ? `${roundText(d)} at ${siteName(d.siteId) || "a site"}` : roundText(d));
+
 export interface RoundGroup {
   roundNumber: number;
   label: string;
@@ -154,10 +160,11 @@ export function planRounds(o: {
       else create.push({ roundNumber: r, siteId, plannedDate: dates[r - 1] });
     }
   }
-  const outsideYear = o.year
+  // A year without both dates can't tell what falls outside it.
+  const year = o.year?.startDate && o.year.endDate ? o.year : null;
+  const outsideYear = year
     ? create.filter(
-        (c) =>
-          c.plannedDate && (c.plannedDate < o.year!.startDate || c.plannedDate > o.year!.endDate),
+        (c) => c.plannedDate && (c.plannedDate < year.startDate || c.plannedDate > year.endDate),
       ).length
     : 0;
   return { create, existing, outsideYear, archivedSites };
