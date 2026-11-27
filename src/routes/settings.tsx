@@ -50,6 +50,7 @@ import {
   useWorkplan,
 } from "@/data/hooks";
 import {
+  downloadImportTemplate,
   exportWorkbook,
   parseBudgetRows,
   readWorkbook,
@@ -618,7 +619,7 @@ function ImportPanel() {
         <CardTitle className="text-base">Import from Excel</CardTitle>
         <CardDescription>
           Upload an .xlsx budget and choose the one activity every row is added to. Rows without
-          numbers become group labels you can edit.
+          numbers become group labels you can edit. Not sure of the layout? Start from the template.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -642,19 +643,25 @@ function ImportPanel() {
             </p>
           )}
         </div>
-        <Label
-          className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${canEdit ? "cursor-pointer hover:bg-muted" : "pointer-events-none opacity-50"}`}
-        >
-          <Upload className="h-4 w-4" />
-          {fileName || "Choose .xlsx file"}
-          <input
-            type="file"
-            accept=".xlsx"
-            disabled={!canEdit}
-            className="hidden"
-            onChange={(e) => onFile(e.target.files?.[0])}
-          />
-        </Label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Label
+            className={`inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm ${canEdit ? "cursor-pointer hover:bg-muted" : "pointer-events-none opacity-50"}`}
+          >
+            <Upload className="h-4 w-4" />
+            {fileName || "Choose .xlsx file"}
+            <input
+              type="file"
+              accept=".xlsx"
+              disabled={!canEdit}
+              className="hidden"
+              onChange={(e) => onFile(e.target.files?.[0])}
+            />
+          </Label>
+          <Button variant="ghost" size="sm" onClick={downloadImportTemplate}>
+            <Download className="h-4 w-4" />
+            Download template
+          </Button>
+        </div>
         {blocks.map((b) => (
           <div key={b.index} className="rounded-md border">
             <div className="flex flex-wrap items-end gap-3 border-b bg-muted/50 p-3">
