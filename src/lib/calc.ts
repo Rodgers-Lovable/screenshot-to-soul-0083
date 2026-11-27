@@ -279,7 +279,7 @@ export function scheduleDates(first: string, count: number, r: Repeat): string[]
 }
 
 export type EventTab = "action" | "month" | "upcoming" | "done" | "all";
-export const UPCOMING_DAYS = 60;
+export const UPCOMING_DAYS = 30;
 
 /** Whether an event belongs on a tab of the Events page. */
 export function inEventTab(ev: BudgetEvent, flags: FlagKind[], tab: EventTab, today: string) {

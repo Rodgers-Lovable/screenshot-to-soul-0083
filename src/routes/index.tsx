@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { format, parseISO, addDays } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { FileSpreadsheet, Info, Plus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,9 +25,11 @@ import {
   burnRate,
   cumulativeByMonth,
   eventFlags,
+  inEventTab,
   lineFlags,
   lineSummary,
   sumSummaries,
+  UPCOMING_DAYS,
 } from "@/lib/calc";
 import { pct, todayISO } from "@/lib/format";
 import { Money, useFmt } from "@/components/app/currency";
@@ -78,15 +80,9 @@ function Dashboard() {
       actual: p.actual / 100,
     }));
     const attCount = (id: string) => d.attachments.filter((a) => a.eventId === id).length;
-    const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
+    // Same rule as the Spending page's Upcoming tab, which the card links to.
     const upcoming = d.events
-      .filter(
-        (e) =>
-          e.status === "planned" &&
-          e.plannedDate &&
-          e.plannedDate >= today &&
-          e.plannedDate <= in30,
-      )
+      .filter((e) => inEventTab(e, [], "upcoming", today))
       .sort((a, b) => a.plannedDate!.localeCompare(b.plannedDate!));
     const overdue = d.events
       .filter((e) => eventFlags(e, 0, today).includes("overdue"))
@@ -258,7 +254,7 @@ function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <WorkList
-          title="Upcoming in next 30 days"
+          title={`Upcoming in next ${UPCOMING_DAYS} days`}
           count={m.upcoming.length}
           search={{ flag: "upcoming" }}
         >
