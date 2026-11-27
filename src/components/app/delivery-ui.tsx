@@ -773,8 +773,17 @@ function Editor({
                 <Input
                   placeholder={proofWord || "Label"}
                   aria-label={`Label for ${p.file.name}`}
+                  title={proofWord ? "Press Tab to use the suggestion" : undefined}
                   value={p.label}
                   className="h-8 w-36 sm:w-56"
+                  onKeyDown={(e) => {
+                    // Tab on an empty label takes the suggested proof word.
+                    if (e.key !== "Tab" || e.shiftKey || !proofWord || p.label) return;
+                    e.preventDefault();
+                    setPending((all) =>
+                      all.map((y, j) => (j === i ? { ...y, label: proofWord } : y)),
+                    );
+                  }}
                   onChange={(e) =>
                     setPending((all) =>
                       all.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)),
