@@ -97,6 +97,73 @@ export async function readWorkbook(file: File): Promise<unknown[][]> {
 }
 
 type Cell = string | number;
+const TEMPLATE_HEADER = [
+  "Description",
+  "Quantity",
+  "Units",
+  "Unit cost (KES)",
+  "Duration",
+  "Duration unit",
+  "Occurrences",
+  "Total (KES)",
+];
+const TEMPLATE_ROWS: (string | number | null)[][] = [
+  ["Training workshop", null, null, null, null, null, null],
+  ["Venue hire", 1, "units", 15000, 2, "days", 1],
+  ["Participant lunch", 25, "pax", 800, 2, "days", 1],
+  ["Field follow-up", null, null, null, null, null, null],
+  ["Fuel", 1, "units", 5000, 1, "one-off", 3],
+  ["Airtime", 10, "lines", 1000, 3, "months", 1],
+];
+
+/** Sheets of the import template. The first sheet is the one the import reads. */
+export function buildImportTemplate(): { budget: unknown[][]; notes: string[][] } {
+  // Header sits on row 2 and examples start on row 3, so formulas start at 3.
+  const budget: unknown[][] = [
+    ["Budget import template"],
+    TEMPLATE_HEADER,
+    ...TEMPLATE_ROWS.map((r, i) => {
+      if (r[1] === null) return r;
+      const n = i + 3;
+      const total = Number(r[1]) * Number(r[3]) * Number(r[4]) * Number(r[6]);
+      return [...r, { t: "n", v: total, f: `B${n}*D${n}*E${n}*G${n}` }];
+    }),
+  ];
+  const notes = [
+    ["How to fill in the Budget sheet"],
+    ["Keep the header row. Columns can be in any order."],
+    ["Each row with a quantity or unit cost becomes one budget line."],
+    ["A row with only a description starts a group for the rows under it."],
+    ["All lines are added to the one activity you pick when importing."],
+    [`Units: free text, for example ${QUANTITY_UNITS.join(", ")}.`],
+    ["Duration unit: days, months or one-off. One-off counts as a duration of 1."],
+    ["Unit cost is in KES. Total is only a check; the app calculates its own."],
+    ["Delete the example rows before importing."],
+  ];
+  return { budget, notes };
+}
+
+export function downloadImportTemplate() {
+  const { budget, notes } = buildImportTemplate();
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(budget);
+  ws["!cols"] = [
+    { wch: 28 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 16 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 14 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, "Budget");
+  const wn = XLSX.utils.aoa_to_sheet(notes);
+  wn["!cols"] = [{ wch: 90 }];
+  XLSX.utils.book_append_sheet(wb, wn, "How to use");
+  XLSX.writeFile(wb, "budget-import-template.xlsx");
+}
+
 export interface ExportData {
   objectives: Objective[];
   outcomes: Outcome[];
