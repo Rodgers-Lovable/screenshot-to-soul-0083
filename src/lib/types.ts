@@ -83,3 +83,18 @@ export interface AuditEntry {
   changedAt: string;
   changedBy: string;
 }
+
+export type StudyRole = "admin" | "member";
+
+export interface Study {
+  id: string;
+  name: string;
+  role: StudyRole;
+}
+
+export interface StudyMember {
+  userId: string;
+  email: string;
+  role: StudyRole;
+  isMe: boolean;
+}

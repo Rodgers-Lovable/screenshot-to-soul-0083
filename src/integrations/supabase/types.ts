@@ -12,6 +12,7 @@ export type Database = {
           label: string | null;
           mime_type: string;
           size_bytes: number;
+          study_id: string;
           uploaded_at: string;
         };
         ComputedFields: never;
@@ -23,6 +24,7 @@ export type Database = {
           label?: string | null;
           mime_type?: string;
           size_bytes?: number;
+          study_id: string;
           uploaded_at: string;
         };
         Update: {
@@ -33,14 +35,22 @@ export type Database = {
           label?: string | null;
           mime_type?: string;
           size_bytes?: number;
+          study_id?: string;
           uploaded_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "attachments_event_id_fkey";
-            columns: ["event_id"];
+            foreignKeyName: "attachments_event_study_fkey";
+            columns: ["event_id", "study_id"];
             isOneToOne: false;
             referencedRelation: "budget_events";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "attachments_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
             referencedColumns: ["id"];
           },
         ];
@@ -55,6 +65,7 @@ export type Database = {
           id: string;
           new_value: string | null;
           old_value: string | null;
+          study_id: string;
         };
         ComputedFields: never;
         Insert: {
@@ -66,6 +77,7 @@ export type Database = {
           id: string;
           new_value?: string | null;
           old_value?: string | null;
+          study_id: string;
         };
         Update: {
           changed_at?: string;
@@ -76,8 +88,17 @@ export type Database = {
           id?: string;
           new_value?: string | null;
           old_value?: string | null;
+          study_id?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       budget_events: {
         Row: {
@@ -92,6 +113,7 @@ export type Database = {
           planned_date: string | null;
           sequence: number;
           status: string;
+          study_id: string;
           title: string;
         };
         ComputedFields: never;
@@ -107,6 +129,7 @@ export type Database = {
           planned_date?: string | null;
           sequence: number;
           status?: string;
+          study_id: string;
           title: string;
         };
         Update: {
@@ -121,14 +144,22 @@ export type Database = {
           planned_date?: string | null;
           sequence?: number;
           status?: string;
+          study_id?: string;
           title?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "budget_events_line_id_fkey";
-            columns: ["line_id"];
+            foreignKeyName: "budget_events_line_study_fkey";
+            columns: ["line_id", "study_id"];
             isOneToOne: false;
             referencedRelation: "budget_lines";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "budget_events_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
             referencedColumns: ["id"];
           },
         ];
@@ -148,6 +179,7 @@ export type Database = {
           quantity: number;
           quantity_unit: string;
           sort_order: number;
+          study_id: string;
           unit_cost_cents: number;
         };
         ComputedFields: never;
@@ -165,6 +197,7 @@ export type Database = {
           quantity: number;
           quantity_unit: string;
           sort_order?: number;
+          study_id: string;
           unit_cost_cents: number;
         };
         Update: {
@@ -181,45 +214,70 @@ export type Database = {
           quantity?: number;
           quantity_unit?: string;
           sort_order?: number;
+          study_id?: string;
           unit_cost_cents?: number;
         };
         Relationships: [
           {
-            foreignKeyName: "budget_lines_component_id_fkey";
-            columns: ["component_id"];
+            foreignKeyName: "budget_lines_component_study_fkey";
+            columns: ["component_id", "study_id"];
             isOneToOne: false;
             referencedRelation: "components";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "budget_lines_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
             referencedColumns: ["id"];
           },
         ];
       };
       budget_periods: {
         Row: {
+          currency: string;
           end_date: string;
           fx_rate: number;
           id: string;
           name: string;
           project_name: string;
           start_date: string;
+          status: string;
+          study_id: string;
         };
         ComputedFields: never;
         Insert: {
+          currency?: string;
           end_date?: string;
           fx_rate?: number;
           id: string;
           name?: string;
           project_name?: string;
           start_date?: string;
+          status?: string;
+          study_id: string;
         };
         Update: {
+          currency?: string;
           end_date?: string;
           fx_rate?: number;
           id?: string;
           name?: string;
           project_name?: string;
           start_date?: string;
+          status?: string;
+          study_id?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "budget_periods_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       components: {
         Row: {
@@ -228,6 +286,7 @@ export type Database = {
           name: string;
           period_id: string;
           sort_order: number;
+          study_id: string;
         };
         ComputedFields: never;
         Insert: {
@@ -236,6 +295,7 @@ export type Database = {
           name: string;
           period_id: string;
           sort_order?: number;
+          study_id: string;
         };
         Update: {
           code?: string;
@@ -243,8 +303,119 @@ export type Database = {
           name?: string;
           period_id?: string;
           sort_order?: number;
+          study_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "components_period_study_fkey";
+            columns: ["period_id", "study_id"];
+            isOneToOne: false;
+            referencedRelation: "budget_periods";
+            referencedColumns: ["id", "study_id"];
+          },
+          {
+            foreignKeyName: "components_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      legacy_evidence: {
+        Row: {
+          path: string;
+          study_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          path: string;
+          study_id: string;
+        };
+        Update: {
+          path?: string;
+          study_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "legacy_evidence_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      platform_admins: {
+        Row: {
+          added_at: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          added_at?: string;
+          user_id: string;
+        };
+        Update: {
+          added_at?: string;
+          user_id?: string;
         };
         Relationships: [];
+      };
+      studies: {
+        Row: {
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          name: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name: string;
+        };
+        Update: {
+          created_at?: string;
+          created_by?: string | null;
+          id?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      study_members: {
+        Row: {
+          added_at: string;
+          email: string;
+          role: string;
+          study_id: string;
+          user_id: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          added_at?: string;
+          email?: string;
+          role: string;
+          study_id: string;
+          user_id: string;
+        };
+        Update: {
+          added_at?: string;
+          email?: string;
+          role?: string;
+          study_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "study_members_study_id_fkey";
+            columns: ["study_id"];
+            isOneToOne: false;
+            referencedRelation: "studies";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       team_members: {
         Row: {
@@ -289,14 +460,26 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      add_study_member: { Args: { _email: string; _study_id: string }; Returns: boolean };
       add_team_member: { Args: { _email: string }; Returns: boolean };
+      can_access_evidence: { Args: { _name: string }; Returns: boolean };
+      can_upload_evidence: { Args: { _name: string }; Returns: boolean };
+      create_study: { Args: { _name: string }; Returns: string };
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"]; _user_id: string };
         Returns: boolean;
       };
+      is_platform_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
+      is_study_admin: { Args: { _study_id: string }; Returns: boolean };
+      is_study_member: { Args: { _study_id: string }; Returns: boolean };
       is_team_member: { Args: Record<PropertyKey, never>; Returns: boolean };
       join_team_if_empty: { Args: Record<PropertyKey, never>; Returns: boolean };
+      remove_study_member: { Args: { _study_id: string; _user_id: string }; Returns: undefined };
       remove_team_member: { Args: { _user_id: string }; Returns: undefined };
+      set_study_admin: {
+        Args: { _is_admin: boolean; _study_id: string; _user_id: string };
+        Returns: undefined;
+      };
       set_team_admin: { Args: { _is_admin: boolean; _user_id: string }; Returns: undefined };
     };
     Enums: {

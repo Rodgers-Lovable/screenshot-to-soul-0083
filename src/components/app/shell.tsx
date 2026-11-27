@@ -31,6 +31,7 @@ import { useBudgetData } from "@/data/hooks";
 import { CurrencyProvider, useCurrency } from "./currency";
 import { RecordActualsForm } from "./record-actuals";
 import { StatusChip } from "./chips";
+import { StudySwitcher } from "./study-switcher";
 import { TourProvider, useTour } from "./tour";
 
 const RecordCtx = createContext<{ open: (id: string) => void; pick: () => void }>({
@@ -88,9 +89,9 @@ function ShellInner({ children }: { children: ReactNode }) {
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-sidebar p-4 md:flex">
           <div className="mb-6 px-2">
             <p className="text-xs uppercase tracking-widest text-sidebar-primary">Budget Tracker</p>
-            <p className="mt-1 text-sm font-medium text-sidebar-accent-foreground">
-              {period ? `${period.projectName} · ${period.name}` : "No period"}
-            </p>
+            <div className="-mx-2 mt-1">
+              <StudySwitcher variant="sidebar" period={period?.name || undefined} />
+            </div>
           </div>
           <nav className="flex flex-col gap-1" aria-label="Main">
             {NAV.map((n) => navLink(n))}
@@ -98,9 +99,7 @@ function ShellInner({ children }: { children: ReactNode }) {
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur sm:px-6">
-            <p className="min-w-0 flex-1 truncate text-sm font-medium md:hidden">
-              {period ? `${period.projectName} · ${period.name}` : "Budget"}
-            </p>
+            <StudySwitcher variant="header" period={period?.name || undefined} />
             <div className="hidden flex-1 md:block" />
             <ToggleGroup
               type="single"
