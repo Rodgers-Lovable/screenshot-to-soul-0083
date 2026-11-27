@@ -35,6 +35,7 @@ import type { BudgetLine, Component } from "@/lib/types";
 import { Money, useFmt } from "@/components/app/currency";
 import { Flags } from "@/components/app/chips";
 import { LineEditor } from "@/components/app/line-editor";
+import { CLOSED_HINT, useYear } from "@/components/app/active-year-context";
 import { PageHeader } from "@/components/app/shell";
 import { Truncated } from "@/components/app/truncated";
 
@@ -58,6 +59,7 @@ export const Route = createFileRoute("/budget")({
 
 function BudgetPage() {
   const d = useBudgetData();
+  const { canEdit, closed } = useYear();
   const f = useFmt();
   const [q, setQ] = useState("");
   const [editor, setEditor] = useState<{ open: boolean; line?: BudgetLine; componentId?: string }>({
@@ -95,6 +97,8 @@ function BudgetPage() {
         <Button
           variant="outline"
           data-tour="budget-add-component"
+          disabled={!canEdit}
+          title={closed ? CLOSED_HINT : undefined}
           onClick={() => setCompOpen(true)}
         >
           <Plus className="h-4 w-4" />
@@ -125,6 +129,7 @@ function BudgetPage() {
                 <Button
                   size="sm"
                   variant="ghost"
+                  disabled={!canEdit}
                   onClick={() => setEditor({ open: true, componentId: c.id })}
                 >
                   <Plus className="h-4 w-4" />
@@ -136,6 +141,7 @@ function BudgetPage() {
                       size="icon"
                       variant="ghost"
                       className="h-7 w-7"
+                      disabled={!canEdit}
                       aria-label="Component actions"
                     >
                       <MoreHorizontal className="h-4 w-4" />
@@ -289,6 +295,7 @@ function LineRow({
   const f = useFmt();
   const nav = useNavigate();
   const dup = useDuplicateLine();
+  const { canEdit } = useYear();
   const go = () => nav({ to: "/budget/lines/$id", params: { id: l.id } });
   return (
     <tr
@@ -341,7 +348,13 @@ function LineRow({
       <td onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size="icon" variant="ghost" className="h-7 w-7" aria-label="Line actions">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              disabled={!canEdit}
+              aria-label="Line actions"
+            >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -461,7 +474,6 @@ function ComponentDialog({
       toast.success(msg);
       onOpenChange(false);
     },
-    onError: (e: Error) => toast.error(e.message),
   });
   const save = () => {
     const input = { code: code.trim(), name: name.trim() };
@@ -588,7 +600,6 @@ function DeleteComponentDialog({
                   toast.success("Component deleted");
                   close();
                 },
-                onError: (e) => toast.error(e.message),
               })
             }
           >

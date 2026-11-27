@@ -130,6 +130,8 @@ export function makeSeed(): StoreData {
     startDate: "2026-09-30",
     endDate: "2027-09-29",
     fxRate: 125,
+    currency: "KES",
+    status: "open",
   };
   const components: Component[] = [
     { id: "c1", periodId: "p1", code: "1", name: "Community Alert Reporting", sortOrder: 1 },

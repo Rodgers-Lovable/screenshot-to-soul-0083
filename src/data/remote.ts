@@ -1,14 +1,43 @@
 // Supabase persistence for the repositories: load the shared budget, write back row diffs.
 import { supabase } from "@/integrations/supabase/client";
-import type { Attachment, AuditEntry, Study, StudyMember, StudyRole } from "@/lib/types";
+import type {
+  ActivitySite,
+  Attachment,
+  AuditEntry,
+  BudgetPeriod,
+  Study,
+  StudyMember,
+  StudyRole,
+  WorkplanData,
+} from "@/lib/types";
 import type { StoreData } from "./store";
 import { logger } from "@/lib/log";
 
 const log = logger("data");
 
 type Key = "components" | "lines" | "events" | "attachments";
+type WKey = "sites" | "objectives" | "outcomes" | "activities" | "indicators" | "responsibles";
 const COLS = {
-  period: ["id", "projectName", "name", "startDate", "endDate", "fxRate"],
+  sites: ["id", "name", "sortOrder", "archivedAt"],
+  objectives: ["id", "periodId", "code", "title", "sortOrder", "copiedFromId"],
+  outcomes: ["id", "objectiveId", "code", "title", "sortOrder", "copiedFromId"],
+  activities: [
+    "id",
+    "outcomeId",
+    "code",
+    "title",
+    "kind",
+    "output",
+    "meansOfVerification",
+    "frequencyLabel",
+    "repeatEvery",
+    "repeatUnit",
+    "notes",
+    "sortOrder",
+    "copiedFromId",
+  ],
+  indicators: ["id", "activityId", "name", "target", "sortOrder", "copiedFromId"],
+  responsibles: ["id", "activityId", "name", "userId", "sortOrder"],
   components: ["id", "periodId", "code", "name", "sortOrder"],
   lines: [
     "id",
@@ -54,6 +83,13 @@ const COLS = {
 } as const;
 const TABLE = {
   period: "budget_periods",
+  sites: "sites",
+  objectives: "objectives",
+  outcomes: "outcomes",
+  activities: "activities",
+  indicators: "activity_indicators",
+  responsibles: "activity_responsibles",
+  activitySites: "activity_sites",
   components: "components",
   lines: "budget_lines",
   events: "budget_events",
@@ -78,33 +114,61 @@ const fromRow = <T>(r: Obj): T =>
 // Untyped view of the client: tables are addressed by name from the maps above.
 const from = (t: string) => supabase.from(t as "components");
 
-async function fetchAll<T>(table: string, study: string, order = "id"): Promise<T[]> {
-  const out: T[] = [];
-  for (let start = 0; ; start += 1000) {
-    const { data, error } = await from(table)
-      .select("*")
-      .eq("study_id" as never, study)
-      .order(order)
-      .range(start, start + 999);
-    if (error) {
-      log.error(`read ${table} failed`, error, { code: error.code });
-      throw new Error(error.message);
+const IN_CHUNK = 100;
+
+/** Reads a table for one study, optionally only rows whose column is in a list of ids. */
+async function fetchAll<T>(
+  table: string,
+  study: string,
+  opt: { order?: string; col?: string; ids?: string[]; eq?: [string, string] } = {},
+): Promise<T[]> {
+  const order = opt.order ?? "id";
+  const page = async (ids?: string[]) => {
+    const out: T[] = [];
+    for (let start = 0; ; start += 1000) {
+      let q = from(table)
+        .select("*")
+        .eq("study_id" as never, study);
+      if (opt.eq) q = q.eq(opt.eq[0] as never, opt.eq[1]);
+      if (ids && opt.col) q = q.in(opt.col as never, ids as never);
+      const { data, error } = await q.order(order).range(start, start + 999);
+      if (error) {
+        log.error(`read ${table} failed`, error, { code: error.code });
+        throw new Error(error.message);
+      }
+      out.push(...(data as Obj[]).map((r) => fromRow<T>(r)));
+      if (data.length < 1000) return out;
     }
-    out.push(...(data as Obj[]).map((r) => fromRow<T>(r)));
-    if (data.length < 1000) return out;
-  }
+  };
+  if (!opt.ids) return page();
+  if (!opt.ids.length) return [];
+  const parts: string[][] = [];
+  for (let i = 0; i < opt.ids.length; i += IN_CHUNK) parts.push(opt.ids.slice(i, i + IN_CHUNK));
+  return (await Promise.all(parts.map((c) => page(c)))).flat();
+}
+const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
+
+export async function getYear(study: string, period: string): Promise<BudgetPeriod | null> {
+  return (await fetchAll<BudgetPeriod>(TABLE.period, study, { eq: ["id", period] }))[0] ?? null;
 }
 
-// Loads are shared per study, so a study switch never receives another study's data.
+/** All workplan years of a study, oldest first. */
+export async function listYears(study: string): Promise<BudgetPeriod[]> {
+  const rows = await fetchAll<BudgetPeriod>(TABLE.period, study, { order: "start_date" });
+  return rows.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id));
+}
+
+// Loads are shared per study and year, so a switch never receives another year's data.
 const inflight = new Map<string, Promise<StoreData>>();
-/** Concurrent callers for the same study share one load. */
-export function loadRemote(study: string): Promise<StoreData> {
-  let p = inflight.get(study);
+/** Concurrent callers for the same study and year share one load. */
+export function loadRemote(study: string, period: string | null): Promise<StoreData> {
+  const k = `${study}:${period ?? ""}`;
+  let p = inflight.get(k);
   if (!p) {
     p = log
       .time(
         "load budget",
-        () => doLoad(study),
+        () => doLoad(study, period),
         (d) => ({
           period: d.period?.name ?? null,
           components: d.components.length,
@@ -114,82 +178,223 @@ export function loadRemote(study: string): Promise<StoreData> {
         }),
       )
       .finally(() => {
-        inflight.delete(study);
+        inflight.delete(k);
       });
-    inflight.set(study, p);
+    inflight.set(k, p);
   }
   return p.then((d) => JSON.parse(JSON.stringify(d)) as StoreData);
 }
-async function doLoad(study: string): Promise<StoreData> {
-  const [periods, components, lines, events, attachments] = await Promise.all([
-    fetchAll<NonNullable<StoreData["period"]>>(TABLE.period, study),
-    fetchAll<StoreData["components"][number]>(TABLE.components, study),
-    fetchAll<StoreData["lines"][number]>(TABLE.lines, study),
-    fetchAll<StoreData["events"][number]>(TABLE.events, study),
-    fetchAll<Attachment>(TABLE.attachments, study),
-  ]);
-  const d: StoreData = {
-    period: periods[0] ?? null,
-    components,
-    lines,
-    events,
-    attachments,
+async function doLoad(study: string, periodId: string | null): Promise<StoreData> {
+  const none: StoreData = {
+    period: null,
+    components: [],
+    lines: [],
+    events: [],
+    attachments: [],
     audit: [],
   };
-  if (!d.period && !components.length) log.info("budget is empty");
-  return d;
+  if (!periodId) return none;
+  const [periods, components] = await Promise.all([
+    fetchAll<BudgetPeriod>(TABLE.period, study, { eq: ["id", periodId] }),
+    fetchAll<StoreData["components"][number]>(TABLE.components, study, {
+      eq: ["period_id", periodId],
+    }),
+  ]);
+  const period = periods[0] ?? null;
+  if (!period) return none;
+  // Children are read through their parents, so another year's rows are never loaded.
+  const lines = await fetchAll<StoreData["lines"][number]>(TABLE.lines, study, {
+    col: "component_id",
+    ids: ids(components),
+  });
+  const events = await fetchAll<StoreData["events"][number]>(TABLE.events, study, {
+    col: "line_id",
+    ids: ids(lines),
+  });
+  const attachments = await fetchAll<Attachment>(TABLE.attachments, study, {
+    col: "event_id",
+    ids: ids(events),
+  });
+  if (!components.length) log.info("year has no budget yet");
+  return { period, components, lines, events, attachments, audit: [] };
 }
 
-export async function syncRemote(before: StoreData, after: StoreData, studyId: string) {
-  const changed = (k: Key | "period") => {
-    const a = k === "period" ? (after.period ? [after.period] : []) : after[k];
-    const b = new Map(
-      (k === "period" ? (before.period ? [before.period] : []) : before[k]).map((r) => [
-        r.id,
-        JSON.stringify(toRow(r, COLS[k])),
-      ]),
+type RunResult = PromiseLike<{ error: { message: string } | null }>;
+const run = async (p: RunResult) => {
+  const { error } = await p;
+  if (error) {
+    log.error("sync failed", error);
+    throw new Error(error.message);
+  }
+};
+const diff = <K extends string>(
+  before: Record<K, { id: string }[]>,
+  after: Record<K, { id: string }[]>,
+  k: K,
+  cols: readonly string[],
+  studyId: string,
+) => {
+  const b = new Map(before[k].map((r) => [r.id, JSON.stringify(toRow(r, cols))]));
+  return after[k]
+    .map((r) => toRow(r, cols))
+    .filter((r) => b.get(r.id as string) !== JSON.stringify(r))
+    .map((r) => ({ ...r, study_id: studyId }));
+};
+const removedIds = <K extends string>(
+  before: Record<K, { id: string }[]>,
+  after: Record<K, { id: string }[]>,
+  k: K,
+) => {
+  const keep = new Set(after[k].map((r) => r.id));
+  return before[k].filter((r) => !keep.has(r.id)).map((r) => r.id);
+};
+const upsertRows = async (table: string, rows: Obj[]) => {
+  for (let i = 0; i < rows.length; i += 500)
+    await run(from(table).upsert(rows.slice(i, i + 500) as never));
+};
+const deleteIds = async (table: string, studyId: string, list: string[]) => {
+  for (let i = 0; i < list.length; i += 200)
+    await run(
+      from(table)
+        .delete()
+        .eq("study_id" as never, studyId)
+        .in("id", list.slice(i, i + 200)),
     );
-    return a
-      .map((r) => toRow(r, COLS[k]))
-      .filter((r) => b.get(r.id as string) !== JSON.stringify(r))
-      .map((r) => ({ ...r, study_id: studyId }));
-  };
-  const removed = <K extends Key>(k: K): StoreData[K] => {
-    const ids = new Set((after[k] as { id: string }[]).map((r) => r.id));
-    return (before[k] as { id: string }[]).filter((r) => !ids.has(r.id)) as StoreData[K];
-  };
-  const written: Record<string, number> = {};
-  const run = async (p: PromiseLike<{ error: { message: string } | null }>) => {
-    const { error } = await p;
-    if (error) {
-      log.error("sync failed", error);
-      throw new Error(error.message);
-    }
-  };
+};
+const insertAudit = async (list: AuditEntry[], studyId: string) => {
+  const rows = list.map((a) => ({ ...toRow(a, COLS.audit), study_id: studyId }));
+  for (let i = 0; i < rows.length; i += 500)
+    await run(from(TABLE.audit).insert(rows.slice(i, i + 500) as never));
+  return rows.length;
+};
 
-  for (const k of ["period", "components", "lines", "events", "attachments"] as const) {
-    const rows = changed(k);
+/** Writes the rows that changed. Years are never written here; they go through functions. */
+export async function syncRemote(before: StoreData, after: StoreData, studyId: string) {
+  const written: Record<string, number> = {};
+  for (const k of ["components", "lines", "events", "attachments"] as const) {
+    const rows = diff(before, after, k, COLS[k], studyId);
     if (rows.length) written[`${k} upserted`] = rows.length;
-    for (let i = 0; i < rows.length; i += 500)
-      await run(from(TABLE[k]).upsert(rows.slice(i, i + 500) as never));
+    await upsertRows(TABLE[k], rows);
   }
-  const gone: Attachment[] = removed("attachments");
+  const gone = before.attachments.filter(
+    (a) => !after.attachments.some((x) => x.id === a.id),
+  ) as Attachment[];
   for (const k of ["attachments", "events", "lines", "components"] as const) {
-    const ids = removed(k).map((r) => r.id);
-    if (ids.length) written[`${k} deleted`] = ids.length;
-    for (let i = 0; i < ids.length; i += 200)
-      await run(
-        from(TABLE[k])
-          .delete()
-          .eq("study_id" as never, studyId)
-          .in("id", ids.slice(i, i + 200)),
-      );
+    const list = removedIds(before, after, k);
+    if (list.length) written[`${k} deleted`] = list.length;
+    await deleteIds(TABLE[k], studyId, list);
   }
-  const audit = after.audit.map((a) => ({ ...toRow(a, COLS.audit), study_id: studyId }));
-  for (let i = 0; i < audit.length; i += 500)
-    await run(from(TABLE.audit).insert(audit.slice(i, i + 500) as never));
+  const audit = await insertAudit(after.audit, studyId);
   await removeEvidence(gone.map((a) => a.fileUrl));
-  log.info("sync ok", { ...written, audit: audit.length });
+  log.info("sync ok", { ...written, audit });
+}
+
+/** Sites for the whole study, plus the active year's workplan. */
+export async function loadWorkplan(study: string, period: string | null): Promise<WorkplanData> {
+  const sites = await fetchAll<WorkplanData["sites"][number]>(TABLE.sites, study);
+  if (!period)
+    return {
+      sites,
+      objectives: [],
+      outcomes: [],
+      activities: [],
+      indicators: [],
+      responsibles: [],
+      activitySites: [],
+      audit: [],
+    };
+  const objectives = await fetchAll<WorkplanData["objectives"][number]>(TABLE.objectives, study, {
+    eq: ["period_id", period],
+  });
+  const outcomes = await fetchAll<WorkplanData["outcomes"][number]>(TABLE.outcomes, study, {
+    col: "objective_id",
+    ids: ids(objectives),
+  });
+  const activities = await fetchAll<WorkplanData["activities"][number]>(TABLE.activities, study, {
+    col: "outcome_id",
+    ids: ids(outcomes),
+  });
+  const actIds = ids(activities);
+  const [indicators, responsibles, activitySites] = await Promise.all([
+    fetchAll<WorkplanData["indicators"][number]>(TABLE.indicators, study, {
+      col: "activity_id",
+      ids: actIds,
+    }),
+    fetchAll<WorkplanData["responsibles"][number]>(TABLE.responsibles, study, {
+      col: "activity_id",
+      ids: actIds,
+    }),
+    fetchAll<ActivitySite>(TABLE.activitySites, study, {
+      col: "activity_id",
+      ids: actIds,
+      order: "activity_id",
+    }),
+  ]);
+  return {
+    sites,
+    objectives,
+    outcomes,
+    activities,
+    indicators,
+    responsibles,
+    activitySites,
+    audit: [],
+  };
+}
+
+const pairKey = (s: ActivitySite) => `${s.activityId}:${s.siteId}`;
+
+export async function syncWorkplan(before: WorkplanData, after: WorkplanData, studyId: string) {
+  const written: Record<string, number> = {};
+  const keys = [
+    "sites",
+    "objectives",
+    "outcomes",
+    "activities",
+    "indicators",
+    "responsibles",
+  ] as const;
+  const had = new Set(before.activitySites.map(pairKey));
+  const has = new Set(after.activitySites.map(pairKey));
+  const removedPairs = before.activitySites.filter((s) => !has.has(pairKey(s)));
+  const addedPairs = after.activitySites.filter((s) => !had.has(pairKey(s)));
+
+  // Site selections go first, so an activity can change kind after its sites are cleared.
+  for (const s of removedPairs)
+    await run(
+      from(TABLE.activitySites)
+        .delete()
+        .eq("study_id" as never, studyId)
+        .eq("activity_id" as never, s.activityId)
+        .eq("site_id" as never, s.siteId),
+    );
+  for (const k of keys as readonly WKey[]) {
+    const rows = diff(before, after, k, COLS[k], studyId);
+    if (rows.length) written[`${k} upserted`] = rows.length;
+    await upsertRows(TABLE[k], rows);
+  }
+  if (addedPairs.length)
+    await run(
+      from(TABLE.activitySites).insert(
+        addedPairs.map((s) => ({
+          study_id: studyId,
+          activity_id: s.activityId,
+          site_id: s.siteId,
+        })) as never,
+      ),
+    );
+  for (const k of ["responsibles", "indicators", "activities", "outcomes", "objectives"] as const) {
+    const list = removedIds(before, after, k);
+    if (list.length) written[`${k} deleted`] = list.length;
+    await deleteIds(TABLE[k], studyId, list);
+  }
+  const audit = await insertAudit(after.audit, studyId);
+  log.info("workplan sync ok", {
+    ...written,
+    "sites linked": addedPairs.length,
+    "sites unlinked": removedPairs.length,
+    audit,
+  });
 }
 
 export async function listAudit(study: string): Promise<AuditEntry[]> {
@@ -326,5 +531,50 @@ export async function setStudyAdmin(study: string, userId: string, isAdmin: bool
     _user_id: userId,
     _is_admin: isAdmin,
   });
+  if (error) throw new Error(error.message);
+}
+
+export interface YearInput {
+  name: string;
+  startDate: string;
+  endDate: string;
+  fxRate: number;
+  currency: string;
+}
+
+/** Creates a year, optionally copying the workplan of an earlier one. Returns the new year id. */
+export async function createYear(
+  study: string,
+  v: YearInput,
+  copyFromId: string | null,
+): Promise<string> {
+  const { data, error } = await rpc("create_workplan_year", {
+    _study_id: study,
+    _name: v.name,
+    _start_date: v.startDate,
+    _end_date: v.endDate,
+    _fx_rate: v.fxRate,
+    _currency: v.currency,
+    _copy_from_period_id: copyFromId,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+export async function updateYear(id: string, v: YearInput & { projectName: string }) {
+  const { error } = await rpc("update_workplan_year", {
+    _period_id: id,
+    _project_name: v.projectName,
+    _name: v.name,
+    _start_date: v.startDate,
+    _end_date: v.endDate,
+    _fx_rate: v.fxRate,
+    _currency: v.currency,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function setYearStatus(id: string, status: "open" | "closed") {
+  const { error } = await rpc("set_workplan_year_status", { _period_id: id, _status: status });
   if (error) throw new Error(error.message);
 }

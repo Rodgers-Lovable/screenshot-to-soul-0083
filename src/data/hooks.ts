@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   adminRepo,
@@ -7,12 +8,15 @@ import {
   eventRepo,
   lineRepo,
   periodRepo,
+  siteRepo,
   studyRepo,
+  workplanRepo,
+  yearRepo,
 } from "./repos";
-import { activeStudyId } from "./active-study";
+import { activePeriodId, activeStudyId } from "./active-study";
 
-// Keys carry the study id, computed at render, so each study has its own cache.
-const key = (name: string) => ["pbt", activeStudyId(), name] as const;
+// Keys carry the study and year ids, computed at render, so each year has its own cache.
+const key = (name: string) => ["pbt", activeStudyId(), activePeriodId() ?? "none", name] as const;
 
 export const usePeriod = () =>
   useQuery({ queryKey: key("period"), queryFn: () => periodRepo.get() });
@@ -23,6 +27,10 @@ export const useEvents = () =>
   useQuery({ queryKey: key("events"), queryFn: () => eventRepo.list() });
 export const useAttachments = () =>
   useQuery({ queryKey: key("attachments"), queryFn: () => attachmentRepo.list() });
+export const useWorkplan = () =>
+  useQuery({ queryKey: key("workplan"), queryFn: () => workplanRepo.get() });
+export const useYears = (studyId: string) =>
+  useQuery({ queryKey: ["years", studyId], queryFn: () => yearRepo.list(studyId) });
 export const useAudit = () => useQuery({ queryKey: key("audit"), queryFn: () => auditRepo.list() });
 
 export const useStudies = () =>
@@ -55,15 +63,103 @@ export function useBudgetData() {
   };
 }
 
+/** Shows a database error as a toast. The id stops the same message showing twice. */
+export const notifyError = (e: unknown) => {
+  const msg = e instanceof Error && e.message ? e.message : "Something went wrong. Try again.";
+  toast.error(msg, { id: msg });
+};
+
 function useM<A, R>(fn: (a: A) => Promise<R>) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["pbt"] }),
+    onError: notifyError,
   });
 }
 
-export const useUpdatePeriod = () => useM(periodRepo.update);
+function useYearM<A, R>(fn: (a: A) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ["years"] }),
+        qc.invalidateQueries({ queryKey: ["pbt"] }),
+      ]),
+    onError: notifyError,
+  });
+}
+export const useUpdatePeriod = () => useYearM(periodRepo.update);
+export const useCreateYear = () =>
+  useYearM(
+    (a: {
+      studyId: string;
+      value: Parameters<typeof yearRepo.create>[1];
+      copyFromId: string | null;
+    }) => yearRepo.create(a.studyId, a.value, a.copyFromId),
+  );
+export const useSetYearStatus = () =>
+  useYearM((a: { id: string; status: "open" | "closed" }) => yearRepo.setStatus(a.id, a.status));
+
+type WP = typeof workplanRepo;
+export const useAddObjective = () => useM(workplanRepo.addObjective);
+export const useUpdateObjective = () =>
+  useM((a: { id: string; patch: Parameters<WP["updateObjective"]>[1] }) =>
+    workplanRepo.updateObjective(a.id, a.patch),
+  );
+export const useRemoveObjective = () => useM(workplanRepo.removeObjective);
+export const useMoveObjective = () =>
+  useM((a: { id: string; dir: "up" | "down" }) => workplanRepo.moveObjective(a.id, a.dir));
+export const useAddOutcome = () =>
+  useM((a: { objectiveId: string; input: Parameters<WP["addOutcome"]>[1] }) =>
+    workplanRepo.addOutcome(a.objectiveId, a.input),
+  );
+export const useUpdateOutcome = () =>
+  useM((a: { id: string; patch: Parameters<WP["updateOutcome"]>[1] }) =>
+    workplanRepo.updateOutcome(a.id, a.patch),
+  );
+export const useRemoveOutcome = () => useM(workplanRepo.removeOutcome);
+export const useMoveOutcome = () =>
+  useM((a: { id: string; dir: "up" | "down" }) => workplanRepo.moveOutcome(a.id, a.dir));
+export const useAddActivity = () =>
+  useM((a: { outcomeId: string; input: Parameters<WP["addActivity"]>[1] }) =>
+    workplanRepo.addActivity(a.outcomeId, a.input),
+  );
+export const useUpdateActivity = () =>
+  useM((a: { id: string; patch: Parameters<WP["updateActivity"]>[1] }) =>
+    workplanRepo.updateActivity(a.id, a.patch),
+  );
+export const useRemoveActivity = () => useM(workplanRepo.removeActivity);
+export const useMoveActivity = () =>
+  useM((a: { id: string; dir: "up" | "down" }) => workplanRepo.moveActivity(a.id, a.dir));
+export const useAddIndicators = () =>
+  useM((a: { activityId: string; input: Parameters<WP["addIndicators"]>[1] }) =>
+    workplanRepo.addIndicators(a.activityId, a.input),
+  );
+export const useUpdateIndicator = () =>
+  useM((a: { id: string; patch: Parameters<WP["updateIndicator"]>[1] }) =>
+    workplanRepo.updateIndicator(a.id, a.patch),
+  );
+export const useRemoveIndicator = () => useM(workplanRepo.removeIndicator);
+export const useAddResponsibles = () =>
+  useM((a: { activityId: string; input: Parameters<WP["addResponsibles"]>[1] }) =>
+    workplanRepo.addResponsibles(a.activityId, a.input),
+  );
+export const useUpdateResponsible = () =>
+  useM((a: { id: string; patch: Parameters<WP["updateResponsible"]>[1] }) =>
+    workplanRepo.updateResponsible(a.id, a.patch),
+  );
+export const useRemoveResponsible = () => useM(workplanRepo.removeResponsible);
+export const useSetActivitySites = () =>
+  useM((a: { activityId: string; siteIds: string[] }) =>
+    workplanRepo.setActivitySites(a.activityId, a.siteIds),
+  );
+export const useAddSite = () => useM(siteRepo.add);
+export const useRenameSite = () =>
+  useM((a: { id: string; name: string }) => siteRepo.rename(a.id, a.name));
+export const useArchiveSite = () =>
+  useM((a: { id: string; archived: boolean }) => siteRepo.setArchived(a.id, a.archived));
 export const useCreateComponent = () => useM(componentRepo.create);
 export const useUpdateComponent = () =>
   useM((a: { id: string; patch: Parameters<typeof componentRepo.update>[1] }) =>

@@ -8,6 +8,7 @@ import { rememberStudy, savedStudyId, setActiveStudyId } from "@/data/active-stu
 import { useCanCreateStudy, useCreateStudy, useMyEmail, useStudies } from "@/data/hooks";
 import type { Study } from "@/lib/types";
 import { ActiveStudyCtx } from "./active-study-context";
+import { YearGate } from "./year-gate";
 
 /** Picks the active study before the app renders, and remounts the app when it changes. */
 export function StudyGate({ children }: { children: ReactNode }) {
@@ -71,7 +72,7 @@ export function StudyGate({ children }: { children: ReactNode }) {
   return (
     <ActiveStudyCtx.Provider value={{ study, studies: list, select }}>
       <div key={study.id} className="contents">
-        {children}
+        <YearGate>{children}</YearGate>
       </div>
     </ActiveStudyCtx.Provider>
   );

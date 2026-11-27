@@ -32,7 +32,7 @@ import { pct, todayISO } from "@/lib/format";
 import { Money, useFmt } from "@/components/app/currency";
 import { Flags } from "@/components/app/chips";
 import { PageHeader, useRecord } from "@/components/app/shell";
-import type { EventsSearch } from "./events";
+import type { SpendingSearch } from "./spending";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -375,7 +375,7 @@ function WorkList({
 }: {
   title: string;
   count: number;
-  search: EventsSearch;
+  search: SpendingSearch;
   children: React.ReactNode;
 }) {
   return (
@@ -385,7 +385,7 @@ function WorkList({
           {title}
           <Badge variant="secondary">{count}</Badge>
         </CardTitle>
-        <Link to="/events" search={search} className="text-sm text-primary hover:underline">
+        <Link to="/spending" search={search} className="text-sm text-primary hover:underline">
           View all
         </Link>
       </CardHeader>

@@ -91,7 +91,6 @@ export function ScheduleDialog({
           toast.success(n ? `${n} event date(s) updated` : "No dates changed");
           onClose();
         },
-        onError: (err) => toast.error(err.message),
       },
     );
   };
